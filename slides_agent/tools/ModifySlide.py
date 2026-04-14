@@ -222,22 +222,24 @@ _HTML_WRITER_MODEL_OAI = "gpt-5.2-codex"
 _HTML_WRITER_MAX_ATTEMPTS = 3
 
 
-def _resolve_writer_model() -> LitellmModel | str:
-    """Return Claude if ANTHROPIC_API_KEY is set, otherwise fall back to OpenAI."""
+def _make_html_writer_agent(caller_model=None) -> Agent:
+    """Create a fresh, stateless agent instance for one ModifySlide call.
+
+    Model priority:
+    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best HTML quality)
+    2. caller_model → inherit from the calling agent (covers /auth TUI flow)
+    """
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     if anthropic_key:
-        return LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
-    return _HTML_WRITER_MODEL_OAI
-
-
-def _make_html_writer_agent() -> Agent:
-    """Create a fresh, stateless agent instance for one ModifySlide call."""
+        model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
+    else:
+        model = caller_model or _HTML_WRITER_MODEL_OAI
     return Agent(
         name="Slide HTML Writer",
         description="Generates complete slide HTML from task briefs.",
         instructions=_read_html_writer_instructions(),
         tools=[],
-        model=_resolve_writer_model(),
+        model=model,
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto"),
             verbosity="medium",
@@ -474,7 +476,7 @@ class ModifySlide(BaseTool):
         theme_css = _read_theme_css(project_dir)
         main_text_contents = _build_main_text_contents(project_dir, slide_filename)
 
-        writer = _make_html_writer_agent()
+        writer = _make_html_writer_agent(caller_model=getattr(self._caller_agent, "model", None))
 
         sub_results: list[Any] = []
         last_validation_error = ""

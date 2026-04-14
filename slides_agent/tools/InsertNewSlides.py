@@ -33,14 +33,6 @@ _PLANNER_MODEL_CLAUDE = "anthropic/claude-sonnet-4-6"
 _PLANNER_MODEL_OAI = "gpt-5.2-codex"
 
 
-def _resolve_planner_model() -> LitellmModel | str:
-    """Return Claude if ANTHROPIC_API_KEY is set, otherwise fall back to OpenAI."""
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    if anthropic_key:
-        return LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
-    return _PLANNER_MODEL_OAI
-
-
 class _PlanSlide(BaseModel):
     page: int
     title: str
@@ -55,8 +47,18 @@ class _PlanResponse(BaseModel):
     slides: list[_PlanSlide]
 
 
-def _make_planner_agent() -> Agent:
-    """Create a fresh, stateless agent instance for one InsertNewSlides call."""
+def _make_planner_agent(caller_model=None) -> Agent:
+    """Create a fresh, stateless agent instance for one InsertNewSlides call.
+
+    Model priority:
+    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best planning quality)
+    2. caller_model → inherit from the calling agent (covers /auth TUI flow)
+    """
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
+    else:
+        model = caller_model or _PLANNER_MODEL_OAI
     return Agent(
         name="Slide Planner",
         description="Creates structured slide outline plans.",
@@ -65,7 +67,7 @@ def _make_planner_agent() -> Agent:
             "Output must be valid JSON only, no markdown fences, no extra text."
         ),
         tools=[],
-        model=_resolve_planner_model(),
+        model=model,
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto"),
             verbosity="medium",
@@ -298,7 +300,7 @@ class InsertNewSlides(BaseTool):
                 rename_map[s.path] = project_dir / new_name
         apply_renames(rename_map)
 
-        planner = _make_planner_agent()
+        planner = _make_planner_agent(caller_model=getattr(self._caller_agent, "model", None))
         prompt = _build_planner_prompt(
             self.task_brief, n, insert_position, existing_templates
         )

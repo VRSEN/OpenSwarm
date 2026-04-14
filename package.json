@@ -1,13 +1,40 @@
 {
-    "name": "open-swarm",
-    "version": "1.0.0",
-    "description": "Node.js dependencies for slides_agent html2pptx workflow",
-    "private": true,
+    "name": "@_vrsen/openswarm",
+    "version": "0.1.0",
+    "description": "An open-source multi-agent AI team built on Agency Swarm",
+    "license": "MIT",
+    "bin": {
+        "openswarm": "./bin/openswarm.js"
+    },
+    "files": [
+        "bin/",
+        "run.py",
+        "onboard.py",
+        "swarm.py",
+        "config.py",
+        "helpers.py",
+        "server.py",
+        "shared_instructions.md",
+        "shared_tools/",
+        "orchestrator/",
+        "data_analyst_agent/",
+        "deep_research/",
+        "docs_agent/",
+        "image_generation_agent/",
+        "slides_agent/",
+        "video_generation_agent/",
+        "virtual_assistant/",
+        "patches/",
+        "pyproject.toml",
+        "package.json",
+        "package-lock.json"
+    ],
     "scripts": {
-        "postinstall": "patch-package && node -e \"process.env.PLAYWRIGHT_BROWSERS_PATH=require('path').join(process.cwd(),'.playwright-browsers');require('child_process').execSync('npx playwright install chromium',{stdio:'inherit',env:process.env})\""
+        "postinstall": "patch-package"
     },
     "dependencies": {
         "dom-to-pptx": "^1.1.5",
+        "patch-package": "^8.0.1",
         "playwright": "^1.59.1",
         "pptxgenjs": "^3.12.0",
         "react": "^18.2.0",
@@ -16,9 +43,7 @@
         "sharp": "^0.33.0"
     },
     "engines": {
-        "node": ">=18.0.0"
-    },
-    "devDependencies": {
-        "patch-package": "^8.0.1"
+        "node": ">=18.0.0",
+        "python": ">=3.10"
     }
 }

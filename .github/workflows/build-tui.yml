@@ -1,0 +1,66 @@
+name: Build TUI Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "third_party/agentswarm-cli/**"
+
+jobs:
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest   # arm64 runner
+            arch: arm64
+          - os: macos-13       # x64 runner
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.12"
+
+      - name: Install dependencies
+        working-directory: third_party/agentswarm-cli
+        run: bun install
+
+      - name: Build macOS ${{ matrix.arch }} binary
+        working-directory: third_party/agentswarm-cli/packages/opencode
+        run: bun run script/build.ts --single --skip-install
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentswarm-darwin-${{ matrix.arch }}
+          path: third_party/agentswarm-cli/packages/opencode/dist/agentswarm-cli-darwin-${{ matrix.arch }}/bin/agentswarm
+          if-no-files-found: error
+
+  collect:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: agentswarm-darwin-arm64
+          path: dist/agentswarm-cli-darwin-arm64/bin
+
+      - name: Download x64
+        uses: actions/download-artifact@v4
+        with:
+          name: agentswarm-darwin-x64
+          path: dist/agentswarm-cli-darwin-x64/bin
+
+      - name: Make binaries executable
+        run: chmod +x dist/agentswarm-cli-darwin-arm64/bin/agentswarm dist/agentswarm-cli-darwin-x64/bin/agentswarm
+
+      - name: Upload combined artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentswarm-darwin-all
+          path: dist/

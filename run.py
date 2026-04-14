@@ -129,8 +129,6 @@ def _bootstrap() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-_PROVIDER_KEYS = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"]
-
 _OPTIONAL_INTEGRATIONS = [
     ("Composio (10,000+ external integrations)", ["COMPOSIO_API_KEY", "COMPOSIO_USER_ID"]),
     ("Anthropic / Claude models", ["ANTHROPIC_API_KEY"]),
@@ -141,16 +139,6 @@ _OPTIONAL_INTEGRATIONS = [
     ("Pixabay (stock images)", ["PIXABAY_API_KEY"]),
     ("Unsplash (stock images)", ["UNSPLASH_ACCESS_KEY"]),
 ]
-
-
-def _ensure_configured() -> None:
-    """Launch the onboarding wizard if no provider key is present."""
-    from dotenv import load_dotenv
-    if any(os.getenv(k) for k in _PROVIDER_KEYS):
-        return
-    from onboard import run_onboarding
-    run_onboarding()
-    load_dotenv(override=True)
 
 
 def build_integration_summary() -> str:
@@ -245,12 +233,38 @@ def main() -> None:
     from dotenv import load_dotenv
     load_dotenv()
 
-    _ensure_configured()
-
     if not os.getenv("AGENTSWARM_BIN"):
-        local_exe = Path(__file__).resolve().parent / "agency.exe"
-        if local_exe.exists():
-            os.environ["AGENTSWARM_BIN"] = str(local_exe)
+        _repo = Path(__file__).resolve().parent
+        # Prefer locally built dev binary when present (third_party/agentswarm-cli build output).
+        import platform as _platform
+        _machine = _platform.machine().lower()
+        _is_arm = _machine in ("aarch64", "arm64")
+        if sys.platform == "win32":
+            _os_name = "windows"
+            _bin_name = "agentswarm.exe"
+        elif sys.platform == "darwin":
+            _os_name = "darwin"
+            _bin_name = "agentswarm"
+        else:
+            _os_name = "linux"
+            _bin_name = "agentswarm"
+        # Try standard x64 first; fall back to baseline for older CPUs.
+        if _is_arm:
+            _arches = ["arm64"]
+        else:
+            _arches = ["x64", "x64-baseline"]
+        _dev_exe = None
+        for _arch in _arches:
+            _candidate = _repo / f"third_party/agentswarm-cli/packages/opencode/dist/agentswarm-cli-{_os_name}-{_arch}/bin/{_bin_name}"
+            if _candidate.exists():
+                _dev_exe = _candidate
+                break
+        if _dev_exe is not None:
+            os.environ["AGENTSWARM_BIN"] = str(_dev_exe)
+        else:
+            local_exe = _repo / "agency.exe"
+            if local_exe.exists():
+                os.environ["AGENTSWARM_BIN"] = str(local_exe)
 
     # Disable OpenAI Agents SDK tracing for terminal demo runs.
     try:
