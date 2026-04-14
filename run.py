@@ -219,9 +219,6 @@ def patch_terminal_title_binary() -> None:
     except Exception:
         return
 
-    if not cached_exe.exists():
-        return
-
     try:
         cached_exe.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(local_exe, cached_exe)
