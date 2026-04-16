@@ -34,7 +34,7 @@ def _bootstrap() -> None:
         print("Installing dependencies, please wait…\n")
         if not shutil.which("uv"):
             subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
-        subprocess.check_call(["uv", "pip", "install", "--system", str(_repo)])
+        subprocess.check_call(["uv", "pip", "install", "--system", "--python", sys.executable, str(_repo)])
         print("\nDone.\n")
 
     # Ensure the Playwright browser binary for the installed playwright version
