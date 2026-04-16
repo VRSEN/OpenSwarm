@@ -16,14 +16,25 @@ jobs:
           python-version: '3.12'
       - name: Test startup
         run: |
-          python3 -c "
-          import subprocess, sys
-          result = subprocess.run(
-              ['npx', '--yes', '@vrsen/openswarm'],
-              timeout=60,
-              capture_output=False,
-              text=True,
-              env={**__import__('os').environ, 'OPENSWARM_DEMO_SILENCE_CONSOLE': '0'}
-          )
-          " 2>&1 | tee output.txt || true
-          grep -q "Traceback" output.txt && exit 1 || exit 0
+          python3 - <<'EOF'
+          import subprocess, os, sys
+
+          env = {**os.environ, "OPENSWARM_DEMO_SILENCE_CONSOLE": "0"}
+          try:
+              result = subprocess.run(
+                  ["npx", "--yes", "@vrsen/openswarm"],
+                  timeout=60,
+                  capture_output=True,
+                  text=True,
+                  env=env,
+              )
+              output = result.stdout + result.stderr
+          except subprocess.TimeoutExpired as e:
+              output = (e.stdout or "") + (e.stderr or "")
+
+          print(output)
+
+          if "Traceback" in output:
+              print("FAILED: traceback detected")
+              sys.exit(1)
+          EOF
