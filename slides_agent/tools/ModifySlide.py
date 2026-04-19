@@ -20,6 +20,7 @@ from typing import Any
 from agency_swarm import Agent, ModelSettings, Reasoning
 from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_image_from_path
 from agents.extensions.models.litellm_model import LitellmModel
+from openai import AsyncOpenAI
 from pydantic import Field
 
 from .slide_file_utils import get_project_dir
@@ -222,18 +223,33 @@ _HTML_WRITER_MODEL_OAI = "gpt-5.2-codex"
 _HTML_WRITER_MAX_ATTEMPTS = 3
 
 
-def _make_html_writer_agent(caller_model=None) -> Agent:
+def _get_caller_openai_client(tool) -> "AsyncOpenAI | None":
+    ctx = getattr(tool, "_context", None)
+    master = getattr(ctx, "context", None)
+    agent_name = getattr(master, "current_agent_name", None)
+    agents = getattr(master, "agents", {})
+    agent = agents.get(agent_name) if agent_name else None
+    model = getattr(agent, "model", None)
+    client = getattr(model, "_client", None)
+    return client if isinstance(client, AsyncOpenAI) else None
+
+
+def _make_html_writer_agent(tool=None) -> Agent:
     """Create a fresh, stateless agent instance for one ModifySlide call.
 
     Model priority:
     1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best HTML quality)
-    2. caller_model → inherit from the calling agent (covers /auth TUI flow)
+    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
+    3. AsyncOpenAI() default (env vars)
     """
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     if anthropic_key:
         model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
-        model = caller_model or _HTML_WRITER_MODEL_OAI
+        from agents import OpenAIResponsesModel
+        from openai import AsyncOpenAI
+        client = (tool and _get_caller_openai_client(tool)) or AsyncOpenAI()
+        model = OpenAIResponsesModel(model=_HTML_WRITER_MODEL_OAI, openai_client=client)
     return Agent(
         name="Slide HTML Writer",
         description="Generates complete slide HTML from task briefs.",
@@ -476,7 +492,7 @@ class ModifySlide(BaseTool):
         theme_css = _read_theme_css(project_dir)
         main_text_contents = _build_main_text_contents(project_dir, slide_filename)
 
-        writer = _make_html_writer_agent(caller_model=getattr(self._caller_agent, "model", None))
+        writer = _make_html_writer_agent(tool=self)
 
         sub_results: list[Any] = []
         last_validation_error = ""

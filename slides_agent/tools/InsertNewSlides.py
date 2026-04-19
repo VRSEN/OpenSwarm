@@ -15,6 +15,7 @@ from typing import Literal
 import os
 from agency_swarm import Agent, ModelSettings, Reasoning
 from agency_swarm.tools import BaseTool
+from openai import AsyncOpenAI
 from agents.extensions.models.litellm_model import LitellmModel
 from pydantic import BaseModel, Field, ValidationError
 
@@ -47,18 +48,33 @@ class _PlanResponse(BaseModel):
     slides: list[_PlanSlide]
 
 
-def _make_planner_agent(caller_model=None) -> Agent:
+def _get_caller_openai_client(tool) -> "AsyncOpenAI | None":
+    ctx = getattr(tool, "_context", None)
+    master = getattr(ctx, "context", None)
+    agent_name = getattr(master, "current_agent_name", None)
+    agents = getattr(master, "agents", {})
+    agent = agents.get(agent_name) if agent_name else None
+    model = getattr(agent, "model", None)
+    client = getattr(model, "_client", None)
+    return client if isinstance(client, AsyncOpenAI) else None
+
+
+def _make_planner_agent(tool=None) -> Agent:
     """Create a fresh, stateless agent instance for one InsertNewSlides call.
 
     Model priority:
     1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best planning quality)
-    2. caller_model → inherit from the calling agent (covers /auth TUI flow)
+    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
+    3. AsyncOpenAI() default (env vars)
     """
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     if anthropic_key:
         model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
-        model = caller_model or _PLANNER_MODEL_OAI
+        from agents import OpenAIResponsesModel
+        from openai import AsyncOpenAI
+        client = (tool and _get_caller_openai_client(tool)) or AsyncOpenAI()
+        model = OpenAIResponsesModel(model=_PLANNER_MODEL_OAI, openai_client=client)
     return Agent(
         name="Slide Planner",
         description="Creates structured slide outline plans.",
@@ -302,7 +318,7 @@ class InsertNewSlides(BaseTool):
                 rename_map[s.path] = project_dir / new_name
         apply_renames(rename_map)
 
-        planner = _make_planner_agent(caller_model=getattr(self._caller_agent, "model", None))
+        planner = _make_planner_agent(tool=self)
         prompt = _build_planner_prompt(
             self.task_brief, n, insert_position, existing_templates
         )
