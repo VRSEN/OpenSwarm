@@ -8,7 +8,6 @@
     },
     "files": [
         "bin/",
-        "agency.py",
         "onboard.py",
         "swarm.py",
         "config.py",

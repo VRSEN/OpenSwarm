@@ -83,7 +83,9 @@ def _run_awaitable(awaitable):
         try:
             box["result"] = asyncio.run(awaitable)
         except BaseException as exc:  # noqa: BLE001
+            import traceback
             err["error"] = exc
+            err["tb"] = traceback.format_exc()
 
     thread = threading.Thread(
         target=_worker,
@@ -95,7 +97,7 @@ def _run_awaitable(awaitable):
     if thread.is_alive():
         raise TimeoutError("InsertNewSlides planner timed out after 180s")
     if "error" in err:
-        raise err["error"]
+        raise RuntimeError(f"{err['error']}\n{err.get('tb', '')}") from err["error"]
     return box.get("result")
 
 

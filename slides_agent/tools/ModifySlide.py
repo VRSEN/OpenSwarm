@@ -500,7 +500,8 @@ class ModifySlide(BaseTool):
             try:
                 final_result = await writer.get_response(prompt)
             except Exception as exc:
-                last_validation_error = f"Sub-agent error (attempt {attempt}): {exc}"
+                import traceback
+                last_validation_error = f"Sub-agent error (attempt {attempt}): {exc}\n{traceback.format_exc()}"
                 continue
             sub_results.append(final_result)
 
