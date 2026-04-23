@@ -15,6 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Test startup
         shell: bash
         run: |
@@ -72,7 +75,6 @@ jobs:
           install = subprocess.run(
               ["npm", "install", str(tarball)],
               cwd=root,
-              check=True,
               capture_output=True,
               text=True,
               env=env,
@@ -123,6 +125,10 @@ jobs:
               ]
           )
           print(output)
+
+          if install.returncode != 0:
+              print(f"FAILED: npm install exited with {install.returncode}")
+              sys.exit(1)
 
           for idx, run in enumerate(failure_runs, start=1):
               if run.returncode != 0:
