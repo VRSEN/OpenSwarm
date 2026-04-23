@@ -80,7 +80,7 @@ jobs:
               env=env,
           )
 
-          binary = root / "node_modules" / ".bin" / "openswarm"
+          binary = root / "node_modules" / "@vrsen" / "openswarm" / "bin" / "openswarm"
 
           failure_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/missing/{binary_name}"}
           failure_runs = [run_version(binary, root, failure_env) for _ in range(2)]
@@ -128,6 +128,10 @@ jobs:
 
           if install.returncode != 0:
               print(f"FAILED: npm install exited with {install.returncode}")
+              sys.exit(1)
+
+          if not binary.exists():
+              print(f"FAILED: expected launcher not found at {binary}")
               sys.exit(1)
 
           for idx, run in enumerate(failure_runs, start=1):
