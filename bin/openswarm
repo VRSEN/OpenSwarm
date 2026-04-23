@@ -5,7 +5,6 @@ const { spawnSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
-const https = require('https')
 
 const scriptPath = fs.realpathSync(__filename)
 const packageDir = path.dirname(path.dirname(scriptPath))
@@ -13,8 +12,14 @@ const packageDir = path.dirname(path.dirname(scriptPath))
 function resolveAgentswarm(startDir) {
   let current = startDir
   for (;;) {
-    const candidate = path.join(current, 'node_modules', 'agentswarm-cli', 'bin', 'agentswarm')
-    if (fs.existsSync(candidate)) return candidate
+    const candidates = [
+      path.join(current, 'node_modules', '@vrsen', 'agentswarm', 'bin', 'agentswarm'),
+      path.join(current, 'node_modules', 'agentswarm-cli', 'bin', 'agentswarm'),
+      path.join(current, 'node_modules', '@vrsen', 'agentswarm', 'node_modules', 'agentswarm-cli', 'bin', 'agentswarm'),
+    ]
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) return candidate
+    }
     const parent = path.dirname(current)
     if (parent === current) return null
     current = parent
@@ -25,79 +30,34 @@ function getBinaryName() {
   return process.platform === 'win32' ? `agentswarm-windows-${os.arch() === 'arm64' ? 'arm64' : 'x64'}.exe` : `agentswarm-${process.platform === 'darwin' ? 'darwin' : 'linux'}-${os.arch() === 'arm64' ? 'arm64' : 'x64'}`
 }
 
-function getDownloadUrl(binaryName) {
-  return `https://github.com/VRSEN/OpenSwarm/releases/latest/download/${binaryName}`
-}
-
-function download(url, dest) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest)
-    const follow = (url) => {
-      https.get(url, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          return follow(res.headers.location)
-        }
-        if (res.statusCode !== 200) {
-          return reject(new Error(`HTTP ${res.statusCode}`))
-        }
-        res.pipe(file)
-        file.on('finish', () => file.close(resolve))
-      }).on('error', reject)
-    }
-    follow(url)
-  })
-}
-
-async function ensureCustomBinary() {
+function resolveCustomBinary() {
   const binaryName = getBinaryName()
   const binaryPath = path.join(packageDir, binaryName)
-  if (fs.existsSync(binaryPath)) return binaryPath
-
-  const url = getDownloadUrl(binaryName)
-  process.stdout.write(`Downloading OpenSwarm TUI...\n`)
   try {
-    await download(url, binaryPath)
-    if (process.platform !== 'win32') fs.chmodSync(binaryPath, 0o755)
+    const stat = fs.statSync(binaryPath)
+    if (!stat.isFile() || stat.size <= 0) return null
+    if (process.platform !== 'win32' && (stat.mode & 0o111) === 0) {
+      fs.chmodSync(binaryPath, 0o755)
+    }
     return binaryPath
-  } catch (e) {
-    process.stderr.write(`openswarm: failed to download TUI binary: ${e.message}\n`)
+  } catch {
     return null
   }
 }
 
 const agentswarmBin = resolveAgentswarm(packageDir)
 if (!agentswarmBin) {
-  process.stderr.write('openswarm: agentswarm-cli not found. Try reinstalling @vrsen/openswarm.\n')
+  process.stderr.write('openswarm: could not resolve @vrsen/agentswarm. Reinstall @vrsen/openswarm or run npm install in this checkout.\n')
   process.exit(1)
 }
 
-function ensureNodeModules() {
-  const nodeModules = path.join(packageDir, 'node_modules')
-  if (!fs.existsSync(nodeModules)) {
-    process.stdout.write('Installing Node.js dependencies...\n')
-    const result = spawnSync(
-      'npm',
-      ['install', '--legacy-peer-deps', '--ignore-scripts'],
-      { cwd: packageDir, stdio: 'pipe', shell: true }
-    )
-    if (result.status !== 0 || result.error) {
-      process.stderr.write(`openswarm: npm install failed\n`)
-      if (result.error) process.stderr.write(`openswarm: ${result.error.message}\n`)
-      if (result.stderr) process.stderr.write(result.stderr.toString())
-    }
-  }
-}
+const customBinary = resolveCustomBinary()
+const env = { ...process.env, AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1' }
+if (customBinary) env.AGENTSWARM_BIN_PATH = customBinary
 
-ensureNodeModules()
-
-ensureCustomBinary().then((customBinary) => {
-  const env = { ...process.env, AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1' }
-  if (customBinary) env.AGENTSWARM_BIN_PATH = customBinary
-
-  const result = spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
-    stdio: 'inherit',
-    env,
-  })
-
-  process.exit(result.status ?? 1)
+const result = spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
+  stdio: 'inherit',
+  env,
 })
+
+process.exit(result.status ?? 1)

@@ -1,11 +1,18 @@
 name: Test Platforms
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/test-mac.yml'
+      - 'bin/openswarm'
+      - 'package.json'
+      - 'package-lock.json'
 
 jobs:
   test:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/setup-node@v4
@@ -15,26 +22,85 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test startup
+        shell: bash
         run: |
-          python3 - <<'EOF'
-          import subprocess, os, sys
+          python - <<'EOF'
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import sys
+          import tempfile
 
+          root = pathlib.Path(tempfile.mkdtemp(prefix="openswarm-smoke-"))
           env = {**os.environ, "OPENSWARM_DEMO_SILENCE_CONSOLE": "0"}
-          try:
-              result = subprocess.run(
-                  ["npx", "--yes", "@vrsen/openswarm"],
-                  timeout=60,
-                  capture_output=True,
-                  text=True,
-                  env=env,
-              )
-              output = result.stdout + result.stderr
-          except subprocess.TimeoutExpired as e:
-              output = (e.stdout or "") + (e.stderr or "")
 
+          subprocess.run(["npm", "init", "-y"], cwd=root, check=True, capture_output=True, text=True, env=env)
+          install = subprocess.run(
+              ["npm", "install", "@vrsen/openswarm"],
+              cwd=root,
+              check=True,
+              capture_output=True,
+              text=True,
+              env=env,
+          )
+
+          binary = root / "node_modules" / ".bin" / ("openswarm.cmd" if os.name == "nt" else "openswarm")
+
+          runs = []
+          for _ in range(2):
+              runs.append(
+                  subprocess.run(
+                      [str(binary), "--version"],
+                      cwd=root,
+                      capture_output=True,
+                      text=True,
+                      env=env,
+                      timeout=120,
+                  )
+              )
+
+          output = "\n".join(
+              [
+                  "=== install stdout ===",
+                  install.stdout,
+                  "=== install stderr ===",
+                  install.stderr,
+              ]
+              + [
+                  f"=== run {idx} stdout ===\n{run.stdout}\n=== run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(runs, start=1)
+              ]
+          )
           print(output)
 
-          if "Traceback" in output:
-              print("FAILED: traceback detected")
+          for idx, run in enumerate(runs, start=1):
+              if run.returncode != 0:
+                  print(f"FAILED: run {idx} exited with {run.returncode}")
+                  sys.exit(1)
+
+          banned = [
+              "failed to download TUI binary",
+              "Installing Node.js dependencies...",
+              "npm install failed",
+              "EACCES",
+              "Traceback",
+          ]
+          lower_output = output.lower()
+          for needle in banned:
+              if needle.lower() in lower_output:
+                  print(f"FAILED: found unexpected output: {needle}")
+                  sys.exit(1)
+
+          version_line = next(
+              (
+                  line.strip()
+                  for line in reversed(runs[-1].stdout.splitlines())
+                  if line.strip()
+              ),
+              "",
+          )
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version_line):
+              print(f"FAILED: unexpected version output: {version_line!r}")
               sys.exit(1)
           EOF
