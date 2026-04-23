@@ -1,6 +1,6 @@
 {
     "name": "@vrsen/openswarm",
-    "version": "0.1.22",
+    "version": "0.1.23",
     "description": "An open-source multi-agent AI team built on Agency Swarm",
     "license": "MIT",
     "bin": {
