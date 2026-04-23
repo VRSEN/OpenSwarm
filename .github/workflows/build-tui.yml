@@ -28,8 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve AgentSwarm version
-        id: agentswarm
+      - name: Resolve packaged AgentSwarm version
+        id: packaged_agentswarm
         shell: bash
         run: |
           version="$(node -p "require('./package.json').dependencies['@vrsen/agentswarm']")"
@@ -39,10 +39,23 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve OpenSwarm TUI source
+        id: openswarm_tui
+        shell: bash
+        run: |
+          repo="$(node -p "require('./package.json').openswarmTui?.buildRepo || ''")"
+          ref="$(node -p "require('./package.json').openswarmTui?.buildRef || ''")"
+          if [[ -z "$repo" || -z "$ref" ]]; then
+            echo "::error::package.json must define openswarmTui.buildRepo and openswarmTui.buildRef"
+            exit 1
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          repository: VRSEN/agentswarm-cli
-          ref: v${{ steps.agentswarm.outputs.version }}
+          repository: ${{ steps.openswarm_tui.outputs.repo }}
+          ref: ${{ steps.openswarm_tui.outputs.ref }}
           path: agentswarm-cli
 
       - uses: oven-sh/setup-bun@v2

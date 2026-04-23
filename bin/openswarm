@@ -2,12 +2,16 @@
 'use strict'
 
 const { spawnSync } = require('child_process')
-const path = require('path')
 const fs = require('fs')
+const http = require('http')
+const https = require('https')
 const os = require('os')
+const path = require('path')
 
 const scriptPath = fs.realpathSync(__filename)
 const packageDir = path.dirname(path.dirname(scriptPath))
+const packageJson = readPackageJson()
+const openswarmTui = packageJson.openswarmTui && typeof packageJson.openswarmTui === 'object' ? packageJson.openswarmTui : {}
 
 function resolveAgentswarm(startDir) {
   let current = startDir
@@ -30,9 +34,69 @@ function getBinaryName() {
   return process.platform === 'win32' ? `agentswarm-windows-${os.arch() === 'arm64' ? 'arm64' : 'x64'}.exe` : `agentswarm-${process.platform === 'darwin' ? 'darwin' : 'linux'}-${os.arch() === 'arm64' ? 'arm64' : 'x64'}`
 }
 
-function resolveCustomBinary() {
-  const binaryName = getBinaryName()
-  const binaryPath = path.join(packageDir, binaryName)
+function readPackageJson() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+function readString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isDisabled(name) {
+  const value = readString(process.env[name])
+  if (!value) return false
+  return !['0', 'false', 'no', 'off'].includes(value.toLowerCase())
+}
+
+function sanitize(value) {
+  return String(value || 'default').replace(/[^a-zA-Z0-9._-]+/g, '_')
+}
+
+function getPackageVersion() {
+  return readString(packageJson.version) || 'unknown'
+}
+
+function getReleaseRepo() {
+  return readString(process.env.OPENSWARM_TUI_REPO) || readString(openswarmTui.releaseRepo) || 'VRSEN/OpenSwarm'
+}
+
+function getReleaseTag() {
+  return readString(process.env.OPENSWARM_TUI_TAG)
+}
+
+function getDownloadUrl(binaryName) {
+  const explicit = readString(process.env.OPENSWARM_TUI_URL)
+  if (explicit) return explicit
+  const repo = getReleaseRepo()
+  const tag = getReleaseTag()
+  if (tag) return `https://github.com/${repo}/releases/download/${tag}/${binaryName}`
+  return `https://github.com/${repo}/releases/latest/download/${binaryName}`
+}
+
+function getCacheRoot() {
+  const home = os.homedir()
+  if (process.platform === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'OpenSwarm', 'tui')
+  }
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Caches', 'OpenSwarm', 'tui')
+  }
+  return path.join(process.env.XDG_CACHE_HOME || path.join(home, '.cache'), 'openswarm', 'tui')
+}
+
+function getCachedBinaryPath(binaryName) {
+  const explicit = readString(process.env.OPENSWARM_TUI_URL)
+  const sourceKey = explicit
+    ? `url_${sanitize(explicit)}`
+    : `repo_${sanitize(getReleaseRepo())}_tag_${sanitize(getReleaseTag() || 'latest')}`
+  return path.join(getCacheRoot(), getPackageVersion(), sourceKey, binaryName)
+}
+
+function resolveUsableBinary(binaryPath) {
   try {
     const stat = fs.statSync(binaryPath)
     if (!stat.isFile() || stat.size <= 0) return null
@@ -45,19 +109,123 @@ function resolveCustomBinary() {
   }
 }
 
+function resolveBundledBinary() {
+  return resolveUsableBinary(path.join(packageDir, getBinaryName()))
+}
+
+function request(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? https : url.startsWith('http:') ? http : null
+    if (!client) {
+      reject(new Error(`Unsupported protocol for ${url}`))
+      return
+    }
+
+    const req = client.get(
+      url,
+      {
+        headers: {
+          'User-Agent': '@vrsen/openswarm',
+        },
+      },
+      (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          res.resume()
+          if (redirects >= 5) {
+            reject(new Error('Too many redirects'))
+            return
+          }
+          resolve(request(new URL(res.headers.location, url).toString(), redirects + 1))
+          return
+        }
+        if (res.statusCode !== 200) {
+          res.resume()
+          reject(new Error(`HTTP ${res.statusCode}`))
+          return
+        }
+        resolve(res)
+      },
+    )
+
+    req.setTimeout(30000, () => req.destroy(new Error('Request timed out')))
+    req.on('error', reject)
+  })
+}
+
+async function download(url, destination) {
+  fs.mkdirSync(path.dirname(destination), { recursive: true })
+  const tempPath = `${destination}.part-${process.pid}-${Date.now()}`
+  let finished = false
+  try {
+    const response = await request(url)
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(tempPath)
+      response.on('error', reject)
+      file.on('error', reject)
+      file.on('close', resolve)
+      response.pipe(file)
+    })
+    const stat = fs.statSync(tempPath)
+    if (!stat.isFile() || stat.size <= 0) {
+      throw new Error('Empty download')
+    }
+    if (process.platform !== 'win32') {
+      fs.chmodSync(tempPath, 0o755)
+    }
+    fs.rmSync(destination, { force: true })
+    fs.renameSync(tempPath, destination)
+    finished = true
+  } finally {
+    if (!finished) {
+      fs.rmSync(tempPath, { force: true })
+    }
+  }
+}
+
+async function ensureCustomBinary() {
+  const bundled = resolveBundledBinary()
+  if (bundled) return bundled
+  if (isDisabled('OPENSWARM_TUI_DISABLE_DOWNLOAD')) return null
+
+  const binaryName = getBinaryName()
+  const cachedPath = getCachedBinaryPath(binaryName)
+  const cached = resolveUsableBinary(cachedPath)
+  if (cached) return cached
+
+  const url = getDownloadUrl(binaryName)
+  process.stdout.write('Downloading OpenSwarm TUI...\n')
+  try {
+    await download(url, cachedPath)
+    return resolveUsableBinary(cachedPath)
+  } catch (error) {
+    fs.rmSync(cachedPath, { force: true })
+    process.stderr.write(
+      `openswarm: custom OpenSwarm TUI unavailable (${error instanceof Error ? error.message : String(error)}); falling back to packaged AgentSwarm UI.\n`,
+    )
+    return null
+  }
+}
+
 const agentswarmBin = resolveAgentswarm(packageDir)
 if (!agentswarmBin) {
   process.stderr.write('openswarm: could not resolve @vrsen/agentswarm. Reinstall @vrsen/openswarm or run npm install in this checkout.\n')
   process.exit(1)
 }
 
-const customBinary = resolveCustomBinary()
-const env = { ...process.env, AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1' }
-if (customBinary) env.AGENTSWARM_BIN_PATH = customBinary
+async function main() {
+  const customBinary = await ensureCustomBinary()
+  const env = { ...process.env, AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1' }
+  if (customBinary) env.AGENTSWARM_BIN_PATH = customBinary
 
-const result = spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
-  stdio: 'inherit',
-  env,
+  const result = spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    env,
+  })
+
+  process.exit(result.status ?? 1)
+}
+
+main().catch((error) => {
+  process.stderr.write(`openswarm: ${error instanceof Error ? error.message : String(error)}\n`)
+  process.exit(1)
 })
-
-process.exit(result.status ?? 1)

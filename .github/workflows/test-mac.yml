@@ -15,6 +15,7 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -25,19 +26,62 @@ jobs:
         shell: bash
         run: |
           python - <<'EOF'
+          import functools
+          import http.server
           import os
           import pathlib
+          import platform
           import re
           import subprocess
           import sys
           import tempfile
+          import threading
 
+          class QuietHandler(http.server.SimpleHTTPRequestHandler):
+              def log_message(self, format, *args):
+                  pass
+
+          def resolve_binary_name():
+              machine = platform.machine().lower()
+              arch = "arm64" if machine in ("arm64", "aarch64") else "x64"
+              if os.name == "nt":
+                  return f"agentswarm-windows-{arch}.exe"
+              if sys.platform == "darwin":
+                  return f"agentswarm-darwin-{arch}"
+              return f"agentswarm-linux-{arch}"
+
+          def start_server(directory):
+              handler = functools.partial(QuietHandler, directory=str(directory))
+              server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+              thread = threading.Thread(target=server.serve_forever, daemon=True)
+              thread.start()
+              return server, thread
+
+          def run_version(binary, cwd, env):
+              return subprocess.run(
+                  [str(binary), "--version"],
+                  cwd=cwd,
+                  capture_output=True,
+                  text=True,
+                  env=env,
+                  timeout=120,
+              )
+
+          repo = pathlib.Path.cwd()
           root = pathlib.Path(tempfile.mkdtemp(prefix="openswarm-smoke-"))
+          release_dir = root / "release"
+          release_dir.mkdir()
           env = {**os.environ, "OPENSWARM_DEMO_SILENCE_CONSOLE": "0"}
+          binary_name = resolve_binary_name()
+          server, thread = start_server(release_dir)
+          base_url = f"http://127.0.0.1:{server.server_port}"
+
+          pack = subprocess.run(["npm", "pack"], cwd=repo, check=True, capture_output=True, text=True, env=env)
+          tarball = repo / next(line.strip() for line in reversed(pack.stdout.splitlines()) if line.strip())
 
           subprocess.run(["npm", "init", "-y"], cwd=root, check=True, capture_output=True, text=True, env=env)
           install = subprocess.run(
-              ["npm", "install", "@vrsen/openswarm"],
+              ["npm", "install", str(tarball)],
               cwd=root,
               check=True,
               capture_output=True,
@@ -47,40 +91,53 @@ jobs:
 
           binary = root / "node_modules" / ".bin" / ("openswarm.cmd" if os.name == "nt" else "openswarm")
 
-          runs = []
-          for _ in range(2):
-              runs.append(
-                  subprocess.run(
-                      [str(binary), "--version"],
-                      cwd=root,
-                      capture_output=True,
-                      text=True,
-                      env=env,
-                      timeout=120,
-                  )
-              )
+          failure_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/missing/{binary_name}"}
+          failure_runs = [run_version(binary, root, failure_env) for _ in range(2)]
+
+          success_runs = []
+          if os.name != "nt":
+              fake_binary = release_dir / binary_name
+              fake_binary.write_text("#!/bin/sh\nprintf '9.9.9-custom\\n'\n", encoding="utf-8")
+              fake_binary.chmod(0o755)
+              success_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/{binary_name}"}
+              success_runs = [run_version(binary, root, success_env) for _ in range(2)]
+
+          server.shutdown()
+          thread.join(timeout=5)
 
           output = "\n".join(
               [
+                  "=== pack stdout ===",
+                  pack.stdout,
+                  "=== pack stderr ===",
+                  pack.stderr,
                   "=== install stdout ===",
                   install.stdout,
                   "=== install stderr ===",
                   install.stderr,
               ]
               + [
-                  f"=== run {idx} stdout ===\n{run.stdout}\n=== run {idx} stderr ===\n{run.stderr}"
-                  for idx, run in enumerate(runs, start=1)
+                  f"=== fallback run {idx} stdout ===\n{run.stdout}\n=== fallback run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(failure_runs, start=1)
+              ]
+              + [
+                  f"=== custom run {idx} stdout ===\n{run.stdout}\n=== custom run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(success_runs, start=1)
               ]
           )
           print(output)
 
-          for idx, run in enumerate(runs, start=1):
+          for idx, run in enumerate(failure_runs, start=1):
               if run.returncode != 0:
-                  print(f"FAILED: run {idx} exited with {run.returncode}")
+                  print(f"FAILED: fallback run {idx} exited with {run.returncode}")
+                  sys.exit(1)
+
+          for idx, run in enumerate(success_runs, start=1):
+              if run.returncode != 0:
+                  print(f"FAILED: custom run {idx} exited with {run.returncode}")
                   sys.exit(1)
 
           banned = [
-              "failed to download TUI binary",
               "Installing Node.js dependencies...",
               "npm install failed",
               "EACCES",
@@ -92,15 +149,28 @@ jobs:
                   print(f"FAILED: found unexpected output: {needle}")
                   sys.exit(1)
 
-          version_line = next(
+          fallback_version = next(
               (
                   line.strip()
-                  for line in reversed(runs[-1].stdout.splitlines())
+                  for line in reversed(failure_runs[-1].stdout.splitlines())
                   if line.strip()
               ),
               "",
           )
-          if not re.fullmatch(r"\d+\.\d+\.\d+", version_line):
-              print(f"FAILED: unexpected version output: {version_line!r}")
+          if not re.fullmatch(r"\d+\.\d+\.\d+", fallback_version):
+              print(f"FAILED: unexpected fallback version output: {fallback_version!r}")
               sys.exit(1)
+
+          if success_runs:
+              custom_version = next(
+                  (
+                      line.strip()
+                      for line in reversed(success_runs[-1].stdout.splitlines())
+                      if line.strip()
+                  ),
+                  "",
+              )
+              if custom_version != "9.9.9-custom":
+                  print(f"FAILED: unexpected custom version output: {custom_version!r}")
+                  sys.exit(1)
           EOF

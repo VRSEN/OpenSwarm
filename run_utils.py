@@ -1,8 +1,10 @@
 import os
 import sys
+import json
 import subprocess
 import shutil
 import tempfile
+import urllib.request
 from pathlib import Path
 
 def _resolve_bin_name() -> str:
@@ -15,6 +17,136 @@ def _resolve_bin_name() -> str:
     if sys.platform == "darwin":
         return f"agentswarm-darwin-{arch}"
     return f"agentswarm-linux-{arch}"
+
+
+def _read_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _env_enabled(name: str) -> bool:
+    value = _read_text(os.getenv(name))
+    if not value:
+        return False
+    return value.lower() not in {"0", "false", "no", "off"}
+
+
+def _sanitize_cache_key(value: str) -> str:
+    text = value or "default"
+    return "".join(char if char.isalnum() or char in "._-" else "_" for char in text)
+
+
+def _load_package_metadata() -> dict:
+    package_json = Path(__file__).resolve().parent / "package.json"
+    try:
+        return json.loads(package_json.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _openswarm_tui_config() -> dict:
+    metadata = _load_package_metadata().get("openswarmTui")
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _package_version() -> str:
+    return _read_text(_load_package_metadata().get("version")) or "unknown"
+
+
+def _release_repo() -> str:
+    return _read_text(os.getenv("OPENSWARM_TUI_REPO")) or _read_text(_openswarm_tui_config().get("releaseRepo")) or "VRSEN/OpenSwarm"
+
+
+def _release_tag() -> str | None:
+    return _read_text(os.getenv("OPENSWARM_TUI_TAG"))
+
+
+def _download_url(bin_name: str) -> str:
+    explicit = _read_text(os.getenv("OPENSWARM_TUI_URL"))
+    if explicit:
+        return explicit
+    tag = _release_tag()
+    if tag:
+        return f"https://github.com/{_release_repo()}/releases/download/{tag}/{bin_name}"
+    return f"https://github.com/{_release_repo()}/releases/latest/download/{bin_name}"
+
+
+def _cache_root() -> Path:
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Caches" / "OpenSwarm" / "tui"
+    if sys.platform == "win32":
+        local = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local"))
+        return local / "OpenSwarm" / "tui"
+    return Path(os.environ.get("XDG_CACHE_HOME", home / ".cache")) / "openswarm" / "tui"
+
+
+def _cached_binary_path(bin_name: str) -> Path:
+    explicit = _read_text(os.getenv("OPENSWARM_TUI_URL"))
+    source_key = (
+        f"url_{_sanitize_cache_key(explicit)}"
+        if explicit
+        else f"repo_{_sanitize_cache_key(_release_repo())}_tag_{_sanitize_cache_key(_release_tag() or 'latest')}"
+    )
+    return _cache_root() / _package_version() / source_key / bin_name
+
+
+def _mark_executable(path: Path) -> None:
+    if sys.platform != "win32":
+        path.chmod(0o755)
+
+
+def _usable_binary(path: Path) -> Path | None:
+    try:
+        stat = path.stat()
+        if not path.is_file() or stat.st_size <= 0:
+            return None
+        _mark_executable(path)
+        return path
+    except Exception:
+        return None
+
+
+def _ensure_custom_binary() -> Path | None:
+    repo_root = Path(__file__).resolve().parent
+    bundled = _usable_binary(repo_root / _resolve_bin_name())
+    if bundled:
+        return bundled
+    if _env_enabled("OPENSWARM_TUI_DISABLE_DOWNLOAD"):
+        return None
+
+    bin_name = _resolve_bin_name()
+    target = _cached_binary_path(bin_name)
+    cached = _usable_binary(target)
+    if cached:
+        return cached
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f"{bin_name}.", suffix=".part", dir=str(target.parent))
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        print("Downloading OpenSwarm TUI, please wait…\n")
+        with urllib.request.urlopen(_download_url(bin_name), timeout=60) as response, tmp_path.open("wb") as file:
+            while True:
+                chunk = response.read(1 << 20)
+                if not chunk:
+                    break
+                file.write(chunk)
+        if tmp_path.stat().st_size <= 0:
+            raise RuntimeError("empty download")
+        _mark_executable(tmp_path)
+        target.unlink(missing_ok=True)
+        os.replace(tmp_path, target)
+        print("\nDone.\n")
+        return target
+    except Exception as exc:
+        tmp_path.unlink(missing_ok=True)
+        target.unlink(missing_ok=True)
+        print(f"Warning: OpenSwarm TUI unavailable ({exc}). Falling back to packaged AgentSwarm UI.\n")
+        return None
 
 
 # ── Bootstrap: create venv + install deps automatically on first run ─────────
@@ -201,10 +333,9 @@ def main() -> None:
     load_dotenv()
 
     if not os.getenv("AGENTSWARM_BIN"):
-        _repo = Path(__file__).resolve().parent
-        local_exe = _repo / _resolve_bin_name()
-        if local_exe.exists():
-            os.environ["AGENTSWARM_BIN"] = str(local_exe)
+        custom_binary = _ensure_custom_binary()
+        if custom_binary:
+            os.environ["AGENTSWARM_BIN"] = str(custom_binary)
 
     # Disable OpenAI Agents SDK tracing for terminal demo runs.
     try:

@@ -31,6 +31,11 @@
     "scripts": {
         "postinstall": "patch-package && node -e \"try{require('fs').chmodSync(require('path').join(__dirname,'bin','openswarm'),0o755)}catch(e){}\""
     },
+    "openswarmTui": {
+        "releaseRepo": "VRSEN/OpenSwarm",
+        "buildRepo": "ArtemShatokhin/agentswarm-cli",
+        "buildRef": "v2.0.0"
+    },
     "dependencies": {
         "@vrsen/agentswarm": "1.4.24",
         "dom-to-pptx": "1.1.5",
