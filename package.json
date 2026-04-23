@@ -30,7 +30,7 @@
         "package-lock.json"
     ],
     "scripts": {
-        "postinstall": "patch-package && node -e \"try{require('fs').chmodSync(require('path').join(__dirname,'bin','openswarm'),0o755)}catch(e){}\""
+        "postinstall": "node -e \"const fs=require('fs');const path=require('path');const cp=require('child_process');const pkg=__dirname;const patchTarget=path.join(pkg,'node_modules','dom-to-pptx');if(fs.existsSync(patchTarget)){cp.execFileSync(process.platform==='win32'?'npx.cmd':'npx',['patch-package'],{cwd:pkg,stdio:'inherit'});}try{fs.chmodSync(path.join(pkg,'bin','openswarm'),0o755)}catch(e){}\""
     },
     "dependencies": {
         "@vrsen/agentswarm": "latest",

@@ -2,6 +2,9 @@ name: Build TUI Binaries
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -25,38 +28,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          repository: ArtemShatokhin/agentswarm-cli
+          ref: aaaa4557178e54ad88ec839345d411cf7cace76e
+          path: agentswarm-cli
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.12"
 
       - name: Install dependencies
-        working-directory: third_party/agentswarm-cli-dev
+        working-directory: agentswarm-cli
         run: bun install
 
       - name: Build binary
-        working-directory: third_party/agentswarm-cli-dev/packages/opencode
+        working-directory: agentswarm-cli/packages/opencode
         run: bun run script/build.ts --single --skip-install
 
       - name: Rename binary (Unix)
         if: matrix.platform != 'windows'
         run: |
-          mv third_party/agentswarm-cli-dev/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm \
-             agency-${{ matrix.platform }}-${{ matrix.arch }}
+          mv agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm \
+             agentswarm-${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Rename binary (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          Move-Item third_party/agentswarm-cli-dev/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm.exe `
-            agency-${{ matrix.platform }}-${{ matrix.arch }}.exe
+          Move-Item agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm.exe `
+            agentswarm-${{ matrix.platform }}-${{ matrix.arch }}.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agency-${{ matrix.platform }}-${{ matrix.arch }}
-          path: agency-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'windows' && '.exe' || '' }}
+          name: agentswarm-${{ matrix.platform }}-${{ matrix.arch }}
+          path: agentswarm-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'windows' && '.exe' || '' }}
           if-no-files-found: error
 
   release:

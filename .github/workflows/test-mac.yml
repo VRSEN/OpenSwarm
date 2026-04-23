@@ -1,13 +1,18 @@
 name: Test Platforms
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-tui.yml'
+      - '.github/workflows/test-mac.yml'
+      - 'bin/openswarm'
+      - 'package.json'
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -15,26 +20,212 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test startup
+        shell: bash
         run: |
-          python3 - <<'EOF'
-          import subprocess, os, sys
+          python - <<'EOF'
+          import functools
+          import http.server
+          import os
+          import pathlib
+          import platform
+          import re
+          import subprocess
+          import sys
+          import tempfile
+          import threading
 
+          class QuietHandler(http.server.SimpleHTTPRequestHandler):
+              def log_message(self, format, *args):
+                  pass
+
+          def resolve_binary_name():
+              machine = platform.machine().lower()
+              arch = "arm64" if machine in ("arm64", "aarch64") else "x64"
+              return f"agentswarm-darwin-{arch}"
+
+          def start_server(directory):
+              handler = functools.partial(QuietHandler, directory=str(directory))
+              server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+              thread = threading.Thread(target=server.serve_forever, daemon=True)
+              thread.start()
+              return server, thread
+
+          def run_version(binary, cwd, env):
+              return subprocess.run(
+                  [str(binary), "--version"],
+                  cwd=cwd,
+                  capture_output=True,
+                  text=True,
+                  env=env,
+                  timeout=120,
+              )
+
+          def resolve_launcher(root):
+              candidates = [
+                  root / "node_modules" / ".bin" / "openswarm",
+                  root / "node_modules" / "@vrsen" / "openswarm" / "bin" / "openswarm",
+              ]
+              for candidate in candidates:
+                  if candidate.exists():
+                      return candidate
+              return None
+
+          repo = pathlib.Path.cwd()
+          root = pathlib.Path(tempfile.mkdtemp(prefix="openswarm-smoke-"))
+          release_dir = root / "release"
+          release_dir.mkdir()
           env = {**os.environ, "OPENSWARM_DEMO_SILENCE_CONSOLE": "0"}
-          try:
-              result = subprocess.run(
-                  ["npx", "--yes", "@vrsen/openswarm"],
-                  timeout=60,
+          binary_name = resolve_binary_name()
+          server, thread = start_server(release_dir)
+          base_url = f"http://127.0.0.1:{server.server_port}"
+
+          pack = subprocess.run(["npm", "pack"], cwd=repo, check=True, capture_output=True, text=True, env=env)
+          tarball = repo / next(line.strip() for line in reversed(pack.stdout.splitlines()) if line.strip())
+
+          subprocess.run(["npm", "init", "-y"], cwd=root, check=True, capture_output=True, text=True, env=env)
+          install = subprocess.run(
+              ["npm", "install", str(tarball)],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              env=env,
+          )
+
+          binary = resolve_launcher(root)
+
+          if binary is None:
+              listing = subprocess.run(
+                  ["find", "node_modules", "-maxdepth", "4", "-name", "openswarm"],
+                  cwd=root,
                   capture_output=True,
                   text=True,
                   env=env,
               )
-              output = result.stdout + result.stderr
-          except subprocess.TimeoutExpired as e:
-              output = (e.stdout or "") + (e.stderr or "")
+          else:
+              listing = None
 
+          failure_runs = []
+          invalid_runs = []
+          success_runs = []
+          if binary is not None:
+              failure_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/missing/{binary_name}"}
+              failure_runs = [run_version(binary, root, failure_env) for _ in range(2)]
+
+              invalid_binary = release_dir / binary_name
+              invalid_binary.write_text("#!/bin/sh\nkill -9 $$\n", encoding="utf-8")
+              invalid_binary.chmod(0o755)
+              invalid_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/{binary_name}"}
+              invalid_runs = [run_version(binary, root, invalid_env) for _ in range(2)]
+
+              fake_binary = release_dir / binary_name
+              fake_binary.write_text("#!/bin/sh\nprintf '9.9.9-custom\\n'\n", encoding="utf-8")
+              fake_binary.chmod(0o755)
+              success_env = {**env, "OPENSWARM_TUI_URL": f"{base_url}/{binary_name}"}
+              success_runs = [run_version(binary, root, success_env) for _ in range(2)]
+
+          server.shutdown()
+          thread.join(timeout=5)
+
+          output = "\n".join(
+              [
+                  "=== pack stdout ===",
+                  pack.stdout,
+                  "=== pack stderr ===",
+                  pack.stderr,
+                  "=== install stdout ===",
+                  install.stdout,
+                  "=== install stderr ===",
+                  install.stderr,
+                  "=== launcher ===",
+                  str(binary),
+                  "=== launcher listing stdout ===",
+                  "" if listing is None else listing.stdout,
+                  "=== launcher listing stderr ===",
+                  "" if listing is None else listing.stderr,
+              ]
+              + [
+                  f"=== fallback run {idx} stdout ===\n{run.stdout}\n=== fallback run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(failure_runs, start=1)
+              ]
+              + [
+                  f"=== invalid run {idx} stdout ===\n{run.stdout}\n=== invalid run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(invalid_runs, start=1)
+              ]
+              + [
+                  f"=== custom run {idx} stdout ===\n{run.stdout}\n=== custom run {idx} stderr ===\n{run.stderr}"
+                  for idx, run in enumerate(success_runs, start=1)
+              ]
+          )
           print(output)
 
-          if "Traceback" in output:
-              print("FAILED: traceback detected")
+          if install.returncode != 0:
+              print(f"FAILED: npm install exited with {install.returncode}")
+              sys.exit(1)
+
+          if binary is None:
+              print("FAILED: expected launcher not found after npm install")
+              sys.exit(1)
+
+          for idx, run in enumerate(failure_runs, start=1):
+              if run.returncode != 0:
+                  print(f"FAILED: fallback run {idx} exited with {run.returncode}")
+                  sys.exit(1)
+
+          for idx, run in enumerate(success_runs, start=1):
+              if run.returncode != 0:
+                  print(f"FAILED: custom run {idx} exited with {run.returncode}")
+                  sys.exit(1)
+
+          for idx, run in enumerate(invalid_runs, start=1):
+              if run.returncode != 0:
+                  print(f"FAILED: invalid run {idx} exited with {run.returncode}")
+                  sys.exit(1)
+
+          banned = [
+              "Installing Node.js dependencies...",
+              "npm install failed",
+              "EACCES",
+              "Traceback",
+          ]
+          lower_output = output.lower()
+          for needle in banned:
+              if needle.lower() in lower_output:
+                  print(f"FAILED: found unexpected output: {needle}")
+                  sys.exit(1)
+
+          fallback_version = next(
+              (
+                  line.strip()
+                  for line in reversed(failure_runs[-1].stdout.splitlines())
+                  if line.strip()
+              ),
+              "",
+          )
+          if not re.fullmatch(r"\d+\.\d+\.\d+", fallback_version):
+              print(f"FAILED: unexpected fallback version output: {fallback_version!r}")
+              sys.exit(1)
+
+          invalid_version = next(
+              (
+                  line.strip()
+                  for line in reversed(invalid_runs[-1].stdout.splitlines())
+                  if line.strip()
+              ),
+              "",
+          )
+          if not re.fullmatch(r"\d+\.\d+\.\d+", invalid_version):
+              print(f"FAILED: unexpected invalid-binary fallback version output: {invalid_version!r}")
+              sys.exit(1)
+
+          custom_version = next(
+              (
+                  line.strip()
+                  for line in reversed(success_runs[-1].stdout.splitlines())
+                  if line.strip()
+              ),
+              "",
+          )
+          if custom_version != "9.9.9-custom":
+              print(f"FAILED: unexpected custom version output: {custom_version!r}")
               sys.exit(1)
           EOF
