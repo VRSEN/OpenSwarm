@@ -152,7 +152,6 @@ python server.py           # Runs on localhost:8080
 - **Watch the full demo:** [YouTube video →](https://youtube.com/watch?v=demo)
 - **Multi-agent framework:** [Agency Swarm](https://github.com/VRSEN/agency-swarm)
 - **External integrations:** [Composio](https://composio.dev)
-- **SaaS platform:** [Agent Swarm](https://agentswarm.ai)
 
 ---
 
