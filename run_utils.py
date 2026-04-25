@@ -17,6 +17,23 @@ def _resolve_bin_name() -> str:
     return f"agentswarm-linux-{arch}"
 
 
+def _ensure_node_playwright_browsers(repo: Path) -> None:
+    """Install Node Playwright browsers where the HTML-to-PPTX runner looks for them."""
+    cli = repo / "node_modules" / "playwright" / "cli.js"
+    if not cli.exists():
+        return
+
+    env = os.environ.copy()
+    env["PLAYWRIGHT_BROWSERS_PATH"] = str(repo / ".playwright-browsers")
+    subprocess.check_call(
+        ["node", str(cli), "install", "chromium"],
+        cwd=str(repo),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 # ── Bootstrap: create venv + install deps automatically on first run ─────────
 # Only stdlib imports above. _bootstrap() is called explicitly — either from
 # swarm.py (via `from run import _bootstrap; _bootstrap()`) or from the
@@ -110,6 +127,10 @@ def _bootstrap() -> None:
             print("Installing Node.js dependencies, please wait…\n")
             subprocess.check_call([_npm, "install"], cwd=str(_repo))
             print("\nDone.\n")
+        try:
+            _ensure_node_playwright_browsers(_repo)
+        except Exception:
+            pass
 
     # Download the OpenSwarm TUI binary from GitHub Releases if missing.
     _bin_name = _resolve_bin_name()

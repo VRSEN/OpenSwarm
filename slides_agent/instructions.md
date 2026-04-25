@@ -232,7 +232,7 @@ Example: add one new conclusion slide after 3 existing slides → **InsertNewSli
 
 ## Execution Logic
 
-- **Parallelism**: Encouraged for research/reading tools. For slide content: use **ModifySlide** and call it multiple times in one turn for different slides (e.g. slide_02, slide_03, slide_04) when the task briefs are ready — the framework may run those tool calls in parallel. BANNED for dependent tasks (e.g., don't modify a slide before the image generation for it is done).
+- **Parallelism**: Encouraged for research/reading tools. For slide content: use **ModifySlide** for at most 3 slides in parallel in one turn (e.g. slide_02, slide_03, slide_04), then wait for those results before starting more. BANNED for dependent tasks (e.g., don't modify a slide before the image generation for it is done).
 - **Cost Control**: The hard ceiling is **3 consecutive modifications** on the same slide — but this is an emergency cap, not a budget. Do not make edits for non-critical issues. 
 
 ## Slide Screenshot Tool
@@ -258,6 +258,8 @@ Call with `project_name`, the ordered `slide_names` list (e.g. `["slide_01", "sl
 ---
 
 ## Final File Delivery
+- For the shared file-delivery question, use the project presentation path as the default: `./mnt/<project_name>/presentations/<output_filename>.pptx`, adjusted for auto-versioning if that file already exists.
+- If the user provides an output directory/path outside the project folder, build the presentation in the project folder first, then copy the final export there with `CopyFile`.
 - **Once `BuildPptxFromHtmlSlides` succeeds, include the output file path in your response.** No research, no citation checking, no verification searches, no re-reading slides after that point. All research must be completed before slide creation begins.
 - Include paths for additional user-facing artifacts (exported PDFs, etc.) only after explicit user request.
 

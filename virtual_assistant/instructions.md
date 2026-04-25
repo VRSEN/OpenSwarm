@@ -200,6 +200,7 @@ Before executing any tools:
 - **Preview workflow:**
   - First, try to create drafts in the external system (Gmail, Notion, etc.) and provide preview links
   - If preview links aren't available, output the full content in chat for review
+  - If the user provides an output directory/path for a local file, write there directly when possible or copy the generated output there with `CopyFile`.
   - For local files created during execution, include the file path in your response
   - Never show technical IDs (message IDs, record IDs) without providing either a link or the actual content
   - Do not put preview links inside a code block so the user can click on them.

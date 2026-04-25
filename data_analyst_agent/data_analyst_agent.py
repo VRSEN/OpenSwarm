@@ -7,7 +7,7 @@ from agency_swarm.tools import (
     IPythonInterpreter,
     LoadFileAttachment,
 )
-from shared_tools import ExecuteTool, FindTools, ManageConnections, SearchTools
+from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
 from config import get_default_model, is_openai_provider
 
@@ -26,6 +26,7 @@ def create_data_analyst() -> Agent:
             PersistentShellTool,
             IPythonInterpreter,
             LoadFileAttachment,
+            CopyFile,
             ExecuteTool,
             FindTools,
             ManageConnections,

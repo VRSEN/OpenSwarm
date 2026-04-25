@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from openai.types.shared import Reasoning
 from pathlib import Path
 from virtual_assistant.tools.ReadFile import ReadFile
+from shared_tools import CopyFile
 
 from config import get_default_model, is_openai_provider
 
@@ -83,6 +84,7 @@ def create_slides_agent() -> Agent:
             IPythonInterpreter,
             PersistentShellTool,
             LoadFileAttachment,
+            CopyFile,
             ReadFile,
             WebSearchTool(search_context_size="high"),
         ],

@@ -1,6 +1,7 @@
 from agency_swarm import Agent, ModelSettings
 from agency_swarm.tools import LoadFileAttachment
 from openai.types.shared.reasoning import Reasoning
+from shared_tools import CopyFile
 
 from config import get_default_model, is_openai_provider
 
@@ -11,7 +12,7 @@ def create_image_generation_agent() -> Agent:
         description="A specialized agent for image generation, editing, and composition.",
         instructions="instructions.md",
         tools_folder="./tools",
-        tools=[LoadFileAttachment],
+        tools=[LoadFileAttachment, CopyFile],
         model=get_default_model(),
         model_settings=ModelSettings(
             reasoning=Reasoning(summary="auto", effort="medium") if is_openai_provider() else None,

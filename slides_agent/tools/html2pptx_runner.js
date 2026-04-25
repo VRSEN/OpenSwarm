@@ -31,7 +31,9 @@
 // npm's cleanup from deleting Python's browser binaries.
 const path   = require('path');
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '..', '..', '.playwright-browsers');
+  // Prefer a project-local cache in the current working directory.
+  // (The launcher creates/runs projects from ./openswarm, so this becomes ./openswarm/.playwright-browsers.)
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(process.cwd(), '.playwright-browsers');
 }
 const fs     = require('fs');
 const os     = require('os');

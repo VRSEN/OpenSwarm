@@ -193,6 +193,8 @@ When a user needs a document in a different format:
 
 ## 6. Final File Delivery
 
+- For the shared file-delivery question, use the project document path as the default: `./mnt/<project_name>/documents/<document_name>.<ext>` where `<ext>` is the planned final format.
+- If the user provides an output directory/path outside the project folder, create or convert the document in the project folder first, then copy the final file there with `CopyFile`.
 - Include the file path in your response for every final user-facing file output: `.source.html`, `.docx`, `.pdf`, `.md`, `.txt`, and any final attachments.
 - Keep drafts, temporary files, and intermediate artifacts internal unless the user explicitly asks to see them.
 - Suggest the user export files into different formats.

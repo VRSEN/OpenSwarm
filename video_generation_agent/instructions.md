@@ -162,6 +162,8 @@ With Veo 3, you can specify prompts for sound effects, ambient noise, and dialog
 ### Final Delivery
 -   **Asset Storage**: All assets MUST be saved in `mnt/{product_name}/generated_videos/` or `mnt/{product_name}/generated_images/`.
 -   **Visual Previews**: ALWAYS analyze generated thumbnails, spritesheets, and last frames to make sure generated video aligns with user's request.
+-   For the shared file-delivery question, use `mnt/{product_name}/generated_videos/<name>.mp4` as the default path for final videos unless the editing/generation tool will save to a more specific path.
+-   If the user provides an output directory/path outside the default location, save there directly when possible or copy the generated output there with `CopyFile`.
 -   Include the file path in your response for every final file (video, subtitles, key image assets).
 -   Do not include paths for intermediate artifacts unless the user explicitly asks for them.
 

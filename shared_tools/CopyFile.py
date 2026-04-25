@@ -38,10 +38,10 @@ class CopyFile(BaseTool):
     """
     Copy a file from source_path to destination_path.
 
-    Both paths must be absolute. The destination directory is created
-    automatically if it does not exist. Use this to move uploaded user files
-    (e.g. from the uploads folder) into a project's assets folder before
-    referencing them in documents or slides.
+    Both paths must be absolute. destination_path can be either a full file path
+    or a directory path. Destination directories are created automatically. Use
+    this to copy uploaded user files into project folders or copy generated files
+    to a user-requested output location.
     """
 
     source_path: str = Field(
@@ -50,7 +50,11 @@ class CopyFile(BaseTool):
     )
     destination_path: str = Field(
         ...,
-        description="Absolute path where the file should be copied to (including filename).",
+        description=(
+            "Absolute path where the file should be copied to. Provide either a "
+            "full file path including filename, or a directory path to keep the "
+            "source filename."
+        ),
     )
 
     def run(self) -> str:
@@ -61,6 +65,9 @@ class CopyFile(BaseTool):
             return f"Error: Source file not found: {src}"
         if not src.is_file():
             return f"Error: Source path is not a file: {src}"
+
+        if self.destination_path.endswith(("/", "\\")) or dst.is_dir():
+            dst = dst / src.name
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)

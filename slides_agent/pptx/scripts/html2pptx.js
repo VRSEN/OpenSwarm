@@ -34,7 +34,7 @@ const path = require('path');
 // Isolate Node.js Playwright browsers from Python Playwright to prevent
 // npm's cleanup from deleting Python's browser binaries.
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '..', '..', '.playwright-browsers');
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(process.cwd(), '.playwright-browsers');
 }
 const { chromium } = require('playwright');
 const sharp = require('sharp');

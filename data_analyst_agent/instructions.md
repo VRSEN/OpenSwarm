@@ -117,6 +117,8 @@ print("Visualization: ./mnt/outputs/revenue_trend.png")
 
 - Start with `ManageConnections` to check connections
 - Save images to `./mnt/outputs/`
+- For the shared file-delivery question, use `./mnt/outputs/<planned_file_name>` as the default path for generated charts, tables, or analysis files unless a tool-specific path is more precise.
+- If the user provides an output directory/path outside the default location, save there directly when possible or copy the generated output there with `CopyFile`.
 - Include file paths in your response for every final file you generate
 - Cite data sources, time periods, and validate assumptions
 - For local files, load directly with pandas
