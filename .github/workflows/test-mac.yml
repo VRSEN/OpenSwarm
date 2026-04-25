@@ -19,6 +19,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: ArtemShatokhin/agentswarm-cli
+          ref: aaaa4557178e54ad88ec839345d411cf7cace76e
+          path: agentswarm-cli
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+      - name: Smoke-test pinned custom macOS TUI build
+        shell: bash
+        working-directory: agentswarm-cli
+        run: |
+          bun install
+          cd packages/opencode
+          bun run script/build.ts --single --skip-install
+          ./dist/agentswarm-cli-darwin-arm64/bin/agentswarm --version
       - name: Test startup
         shell: bash
         run: |
