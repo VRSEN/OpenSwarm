@@ -13,9 +13,6 @@ from pathlib import Path
 from agency_swarm.tools import BaseTool
 from pydantic import Field
 
-from slides_agent.tools.slide_file_utils import get_mnt_dir
-
-
 def _normalize_mnt_path(p: str) -> str:
     raw = (p or "").strip()
     if not raw:
@@ -28,7 +25,7 @@ def _normalize_mnt_path(p: str) -> str:
 
     # If the agent provides "/mnt/..." treat it as repo-local "./mnt/...".
     if raw.startswith("/mnt/") or raw == "/mnt":
-        mnt = get_mnt_dir().resolve()
+        mnt = (Path("/app/mnt") if Path("/.dockerenv").is_file() else Path(__file__).parents[1] / "mnt").resolve()
         suffix = raw[len("/mnt/") :] if raw.startswith("/mnt/") else ""
         return str(mnt / suffix)
     return raw
