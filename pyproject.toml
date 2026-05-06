@@ -47,6 +47,7 @@ dependencies = [
     "cairosvg",
     "weasyprint",
     "html2text",
+    "markdown-it-py",
     "playwright",
     # AI / media generation
     "google-genai",
