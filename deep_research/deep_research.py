@@ -12,7 +12,7 @@ def create_deep_research() -> Agent:
         description="Comprehensive deep research agent that conducts thorough research on any topic.",
         instructions="./instructions.md",
         files_folder="./files",
-        tools=[WebSearchTool(), ScholarSearch, IPythonInterpreter],
+        tools=[WebSearchTool(), ScholarSearch, IPythonInterpreter, DeepReadFile],
         model=get_default_model(),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto") if is_openai_provider() else None,
