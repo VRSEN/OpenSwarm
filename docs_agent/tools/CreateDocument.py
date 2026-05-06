@@ -142,8 +142,14 @@ Note: The .source.html file is the canonical source to be used for document conv
 
     def _create_markdown(self, doc_name, project_dir, markdown_value):
         md_path = project_dir / f"{doc_name}.md"
-        if md_path.exists() and not self.overwrite:
-            return f"Error: Document '{doc_name}' already exists in project '{self.project_name}'. Use overwrite=True to replace it, or choose a different document name."
+        source_path = project_dir / f"{doc_name}.source.html"
+        
+        # Guard: Respect overwrite flag for BOTH files
+        if not self.overwrite:
+            if md_path.exists():
+                return f"Error: Markdown file '{md_path.name}' already exists in project '{self.project_name}'. Use overwrite=True to replace it."
+            if source_path.exists():
+                return f"Error: HTML source '{source_path.name}' already exists in project '{self.project_name}'. Creating this Markdown document would overwrite it. Use overwrite=True to proceed."
 
         md_path.write_text(markdown_value, encoding="utf-8")
         
@@ -153,7 +159,6 @@ Note: The .source.html file is the canonical source to be used for document conv
         html_body = md_parser.render(markdown_value)
         html_full = f"<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{html_body}</body></html>"
         
-        source_path = project_dir / f"{doc_name}.source.html"
         source_path.write_text(_ensure_ua_reset(html_full), encoding='utf-8')
 
         if not md_path.exists():
