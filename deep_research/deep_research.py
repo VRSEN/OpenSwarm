@@ -2,6 +2,7 @@ from agency_swarm import Agent, ModelSettings
 from agency_swarm.tools import WebSearchTool, IPythonInterpreter
 from openai.types.shared import Reasoning
 from virtual_assistant.tools.ScholarSearch import ScholarSearch
+from shared_tools import DeepReadFile
 
 from config import get_default_model, is_openai_provider
 
