@@ -1,63 +1,52 @@
-# OpenSwarm — Customization Guide
+# CodeSwarm — Customization Guide
 
 This file gives coding agents (Cursor, Claude Code, Codex, etc.) everything they need to understand and customize this swarm. Read it before making any changes.
 
 ---
 
-## What is OpenSwarm?
+## What is CodeSwarm?
 
-OpenSwarm is a multi-agent AI team you can fork and reshape into any kind of swarm you need — SEO, sales, research, finance, customer support, or anything else. Each agent is a specialist. They collaborate through a shared orchestrator.
+CodeSwarm is a multi-agent AI development team you can fork and reshape for any coding workflow. Each agent is a specialist — architect, frontend dev, backend dev, code reviewer, QA tester, and DevOps. They collaborate through a shared architect (orchestrator).
 
 ---
 
 ## Folder Structure
 
 ```
-swarm.py                  ← main config: imports all agents, defines how they connect
-shared_instructions.md    ← context shared across every agent
-run.py                    ← CLI entry point (terminal demo)
-server.py                 ← API entry point (FastAPI server)
+swarm.py                  <- main config: imports all agents, defines how they connect
+shared_instructions.md    <- context shared across every agent
+server.py                 <- API entry point (FastAPI server)
 
-orchestrator/
-  orchestrator.py         ← agent definition
-  instructions.md         ← system prompt
+architect/
+  architect.py            <- agent definition
+  instructions.md         <- system prompt
 
-data_analyst_agent/
-  data_analyst_agent.py
+frontend_dev/
+  frontend_dev.py
   instructions.md
-  tools/                  ← custom tools for this agent
+  tools/                  <- custom tools for this agent
 
-docs_agent/
-  docs_agent.py
-  instructions.md
-  tools/
-
-slides_agent/
-  slides_agent.py
+backend_dev/
+  backend_dev.py
   instructions.md
   tools/
 
-image_generation_agent/
-  image_generation_agent.py
+code_reviewer/
+  code_reviewer.py
   instructions.md
   tools/
 
-video_generation_agent/
-  video_generation_agent.py
+qa_tester/
+  qa_tester.py
   instructions.md
   tools/
 
-deep_research/
-  deep_research.py
+devops/
+  devops.py
   instructions.md
   tools/
 
-virtual_assistant/
-  virtual_assistant.py
-  instructions.md
-  tools/
-
-shared_tools/             ← tools available to all agents (Composio integrations, etc.)
+shared_tools/             <- tools available to all agents
 ```
 
 ---
@@ -70,26 +59,26 @@ shared_tools/             ← tools available to all agents (Composio integratio
 2. Instantiates all agents
 3. Defines communication flows — who can talk to whom
 
-The default pattern is **orchestrator-to-all**: the orchestrator can send messages to every specialist, and all agents can hand off to each other.
+The default pattern is **architect-to-all**: the architect can send messages to every specialist, and all agents can hand off to each other.
 
 ---
 
 ## How to Customize
 
-To build your own swarm from this repo:
+To build your own coding swarm from this repo:
 
-1. **Fork and rename** the repo (e.g., `seo-swarm`)
+1. **Fork and rename** the repo (e.g., `mobile-dev-swarm`)
 2. **Decide which agents to keep, rename, or replace**
    - Rename the folder and its files to match the new agent's purpose
    - Update `instructions.md` with the new system prompt
    - Update `swarm.py` to import and register the renamed agent
 3. **Add or remove tools** inside each agent's `tools/` folder
 4. **Update `shared_instructions.md`** with any context all agents should share
-5. **Run** with `python run.py`
+5. **Run** with `python swarm.py`
 
 ### Example prompt to give your coding agent
 
-> "Turn this into an SEO optimization swarm. The Research Agent becomes an SEO Keyword Planner, the Docs Agent becomes a Blog Post Writer, the Data Analyst becomes an SEO Analytics Agent (Google Search Console + GA4), and the General Agent handles technical SEO like schema markup and site audits. Keep the orchestrator and shared tools as-is."
+> "Turn this into a mobile development swarm. Replace Frontend Dev with an iOS Developer and an Android Developer, keep Backend Dev for API work, and add a Mobile QA specialist. The Architect should understand mobile app architecture patterns."
 
 The coding agent will read this file, understand the structure, and make the right changes automatically.
 
@@ -97,16 +86,14 @@ The coding agent will read this file, understand the structure, and make the rig
 
 ## Current Agents
 
-| Agent | Purpose |
-|---|---|
-| `orchestrator` | Routes tasks to the right specialist |
-| `virtual_assistant` | Email, calendar, Slack, file management |
-| `deep_research` | Web research and synthesis |
-| `data_analyst_agent` | Data analysis, visualization, statistical modeling |
-| `docs_agent` | Document creation and editing |
-| `slides_agent` | PowerPoint / HTML slide generation |
-| `image_generation_agent` | AI image generation and editing |
-| `video_generation_agent` | AI video generation and editing |
+| Agent | Purpose | Specialties |
+|---|---|---|
+| `architect` | Plans architecture and routes tasks | System design, component breakdown, task delegation |
+| `frontend_dev` | Frontend implementation | React, Vue, Angular, TypeScript, CSS, UI/UX |
+| `backend_dev` | Backend implementation | Node.js, Python, APIs, databases, auth |
+| `code_reviewer` | Code quality assurance | Reviews, security, best practices, refactoring |
+| `qa_tester` | Testing and QA | Unit tests, integration tests, E2E, bug hunting |
+| `devops` | Infrastructure and deployment | CI/CD, Docker, Kubernetes, cloud, monitoring |
 
 ---
 
@@ -115,8 +102,12 @@ The coding agent will read this file, understand the structure, and make the rig
 - Each agent folder has one `<name>.py` file and one `instructions.md`
 - `instructions.md` is the agent's system prompt — edit it to change behavior
 - Tools live in `tools/` and are auto-loaded by the agent definition
-- `shared_tools/` contains Composio-powered integrations (Gmail, Slack, GitHub, etc.) available to all agents
+- `shared_tools/` contains utilities available to all agents
 - Models are configured via `DEFAULT_MODEL` in `.env` — never hardcoded
+
+---
+
+## Additional Resources
 
 Before proceeding with agent creation, please read the following instructions carefully:
 
@@ -125,6 +116,6 @@ Before proceeding with agent creation, please read the following instructions ca
 The following files can be read on demand, depending on the task at hand:
 
 - `.cursor/commands/add-mcp.md` - how to add MCP servers to an agent
-- `.cursor/commands/mcp-code-exec.md` - how to convert an MCP server into the Code Execution Pattern (progressive tool disclosure, 98% token reduction)
+- `.cursor/commands/mcp-code-exec.md` - how to convert an MCP server into the Code Execution Pattern
 - `.cursor/commands/write-instructions.md` - how to write effective instructions for AI agents
-- `.cursor/commands/create-prd.md` - how to create a PRD for an agent (use for complex multi agent systems)
+- `.cursor/commands/create-prd.md` - how to create a PRD for an agent

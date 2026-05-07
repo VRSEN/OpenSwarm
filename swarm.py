@@ -24,39 +24,33 @@ def create_agency(load_threads_callback=None):
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage
 
-    from orchestrator import create_orchestrator
-    from virtual_assistant import create_virtual_assistant
-    from deep_research import create_deep_research
-    from data_analyst_agent import create_data_analyst
-    from slides_agent import create_slides_agent
-    from docs_agent import create_docs_agent
-    from video_generation_agent import create_video_generation_agent
-    from image_generation_agent import create_image_generation_agent
+    from architect import create_architect
+    from frontend_dev import create_frontend_dev
+    from backend_dev import create_backend_dev
+    from code_reviewer import create_code_reviewer
+    from qa_tester import create_qa_tester
+    from devops import create_devops
 
-    orchestrator = create_orchestrator()
-    virtual_assistant = create_virtual_assistant()
-    deep_research = create_deep_research()
-    data_analyst = create_data_analyst()
-    slides_agent = create_slides_agent()
-    docs_agent = create_docs_agent()
-    video_generation_agent = create_video_generation_agent()
-    image_generation_agent = create_image_generation_agent()
+    architect = create_architect()
+    frontend_dev = create_frontend_dev()
+    backend_dev = create_backend_dev()
+    code_reviewer = create_code_reviewer()
+    qa_tester = create_qa_tester()
+    devops = create_devops()
 
     all_agents = [
-        orchestrator,
-        virtual_assistant,
-        slides_agent,
-        deep_research,
-        data_analyst,
-        docs_agent,
-        video_generation_agent,
-        image_generation_agent,
+        architect,
+        frontend_dev,
+        backend_dev,
+        code_reviewer,
+        qa_tester,
+        devops,
     ]
 
     send_message_flows = [
-        (orchestrator, specialist, SendMessage)
+        (architect, specialist, SendMessage)
         for specialist in all_agents
-        if specialist is not orchestrator
+        if specialist is not architect
     ]
 
     handoff_flows = [
@@ -69,7 +63,7 @@ def create_agency(load_threads_callback=None):
     agency = Agency(
         *all_agents,
         communication_flows=send_message_flows + handoff_flows,
-        name="OpenSwarm",
+        name="CodeSwarm",
         shared_instructions="shared_instructions.md",
         load_threads_callback=load_threads_callback,
     )

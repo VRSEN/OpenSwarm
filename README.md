@@ -1,140 +1,97 @@
 <div align="center">
 
-# 🚀 OpenSwarm
+# CodeSwarm
 
-![OpenSwarm](assets/new-framework.jpg)
+![CodeSwarm](assets/new-framework.jpg)
 
 </div>
 
-**The fully open-source multi-agent system that does everything Claude Code can't.**
+**A multi-agent coding team that works on your codebase together.**
 
-Create polished slide decks, research reports, data visualizations, documents, images, and videos — all from a single prompt in your terminal. No platform, no UI, no setup hassles.
+Get architecture advice, frontend and backend implementation, code reviews, tests, and DevOps configurations — all from a single prompt. A full dev team of AI specialists working in your terminal.
 
-✨ **One prompt → Complete deliverables**
-🎯 **8 specialized agents working together**
-⚡ **Install in 30 seconds, running in 60**
-🔧 **100% customizable and forkable**
+**6 specialized coding agents working together**
+**Full-stack web: React, Vue, Node.js, Python, and more**
+**Install in 30 seconds, running in 60**
+**100% customizable and forkable**
 
 Built on [Agency Swarm](https://github.com/VRSEN/agency-swarm) — the framework powering real AI agencies.
 
 ---
 
-> 💼 **Investor or looking to integrate AI agents into your SaaS?**
-> We're the team behind OpenSwarm and Agency Swarm, building the future of multi-agent systems.
-> **[Partner with us →](https://vrsen-ai.notion.site/fee2d391a8d74b24baa04a0b648af83c?pvs=105)**
+## What Makes This Different?
 
----
+Instead of one agent trying to do everything poorly, you get **specialized developers coordinated by an architect**.
 
-## 💡 What Makes This Different?
-
-Instead of one agent trying to do everything poorly, you get **specialists coordinated by an orchestrator**.
-
-### 🎯 Real Examples
+### Real Examples
 
 Paste these into your terminal and watch magic happen:
 
-- **"Create a complete investor pitch for OpenSwarm"** → Full deck + executive summary + market research
-- **"Research my top 5 competitors and write 3 SEO-optimized blog posts"** → Competitive analysis + keyword research + publish-ready content
-- **"Analyze this data and create a quarterly report with charts"** → Data insights + visualizations + formatted document
-- **"Generate a product launch video with animations"** → Professional video with graphics and transitions
-- **"Build me a marketing campaign for Q2"** → Strategy doc + creative assets + implementation timeline
-
-Connect to 10,000+ external services (Gmail, Slack, GitHub, HubSpot) via Composio for even more power.
+- **"Build a user authentication system with JWT"** → Architecture plan + backend API + frontend login form + tests
+- **"Review this PR for security issues"** → Security audit + best practices review + fix suggestions
+- **"Add CI/CD pipeline for this Node.js project"** → GitHub Actions workflow + Docker config + deployment scripts
+- **"Refactor this module to use TypeScript"** → Type definitions + refactored code + updated tests
+- **"Build a REST API for managing todos"** → Database schema + API endpoints + validation + unit tests
 
 ---
 
-## 🤖 Meet Your AI Team
+## Meet Your AI Dev Team
 
-| Agent                      | What it does                                                                                                                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Orchestrator**           | Routes every user request to the right specialist(s). Never answers directly — pure coordination.                                                                                            |
-| **Virtual Assistant**      | Handles everyday tasks: writing, scheduling, messaging, task management. Gains 10,000+ external integrations via [Composio](https://composio.dev) (Gmail, Slack, GitHub, HubSpot, and more). |
-| **Deep Research**          | Conducts comprehensive, evidence-based web research with citations and balanced analysis.                                                                                                    |
-| **Data Analyst**           | Analyses structured data, builds charts, runs statistical models — all inside an isolated IPython kernel.                                                                                    |
-| **Slides Agent**           | Generates complete, visually polished HTML slide decks, then exports them to PPTX.                                                                                                           |
-| **Docs Agent**             | Creates formatted Word documents and PDFs from outlines or raw content.                                                                                                                      |
-| **Image Generation Agent** | Generates and edits images using Gemini 2.5 Flash Image / Gemini 3 Pro Image and fal.ai.                                                                                                     |
-| **Video Generation Agent** | Produces videos via Sora (OpenAI), Veo (Google), and Seedance (fal.ai); also edits and combines clips.                                                                                       |
+| Agent | What it does |
+|---|---|
+| **Architect** | Plans system architecture and routes tasks to the right specialist(s). Never codes directly — pure coordination. |
+| **Frontend Dev** | Builds UI with React, Vue, Angular, Svelte. TypeScript, CSS, component architecture, state management. |
+| **Backend Dev** | Builds APIs and server logic with Node.js, Python, Go. Database design, authentication, microservices. |
+| **Code Reviewer** | Reviews code for quality, security, performance. Enforces best practices and suggests refactoring. |
+| **QA Tester** | Writes unit tests, integration tests, E2E tests. Finds bugs and edge cases. |
+| **DevOps** | Sets up CI/CD pipelines, Docker, Kubernetes, cloud deployments, monitoring. |
 
 ---
 
-## 📦 Get Started in 30 Seconds
+## Get Started in 30 Seconds
 
-**For most users (recommended):**
-
-```bash
-npm install -g @vrsen/openswarm
-openswarm
-```
-
-That's it! The setup wizard handles everything: authentication, dependencies, and configuration.
-
-**Requirements:** Node.js 20+ (Python 3.10+ auto-installed)
-
-## 🔧 Build Your Own Swarm
-
-Fork this repo and create your own specialized AI team in minutes:
+**Quick start:**
 
 ```bash
-git clone https://github.com/VRSEN/openswarm.git
-cd openswarm
+git clone https://github.com/yourusername/codeswarm.git
+cd codeswarm
+pip install -r requirements.txt
+python swarm.py
 ```
 
-Then tell **Claude Code**, **Cursor**, or **Codex**:
+**Requirements:** Python 3.10+
 
-> _"Turn this into an SEO optimization swarm"_
+## API Keys & Setup
 
-They'll automatically customize all agents for your use case.
-
-**Popular custom swarms:**
-
-- **SEO Swarm:** Keyword research + competitor analysis + blog writing
-- **Sales Swarm:** Lead research + outreach + proposal generation
-- **Marketing Swarm:** Campaign planning + creative assets + analytics
-- **Product Swarm:** Market research + feature specs + launch materials
-
-## ⚙️ API Keys & Setup
-
-The setup wizard walks you through everything, but you'll need at least one of these:
+You'll need at least one of these:
 
 **Required (choose one):**
 
-- `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
+- `OPENAI_API_KEY` - For GPT models
 - `ANTHROPIC_API_KEY` - For Claude models
 
-**Optional superpowers:**
+Create a `.env` file:
 
-- `COMPOSIO_API_KEY` - Unlock 10,000+ integrations (Gmail, Slack, GitHub, etc.)
-- `GOOGLE_API_KEY` - Gemini image generation + Veo video
-- `FAL_KEY` - Advanced video editing and effects
-- `SEARCH_API_KEY` - Web search for research agent
-
-Tools gracefully degrade when keys are missing — you'll get clear instructions on what to add.
+```bash
+cp .env.example .env
+# Add your API keys
+```
 
 ---
 
-## 🚀 Coming Soon
-
-- **Agent Builder Agent** - Create custom swarms from a single prompt
-- **OpenClaw + Claude Code integration** - All agents in one place
-
-⭐ **Star us on GitHub** to stay updated and help us prioritize features!
-
-## 🏗️ For Developers
+## For Developers
 
 **Local development:**
 
 ```bash
-git clone https://github.com/VRSEN/openswarm.git
-cd openswarm
+git clone https://github.com/yourusername/codeswarm.git
+cd codeswarm
 python swarm.py
 ```
 
 **Docker deployment:**
 
 ```bash
-git clone https://github.com/VRSEN/openswarm.git
-cd openswarm
 cp .env.example .env        # Add your API keys
 docker-compose up --build
 ```
@@ -147,16 +104,30 @@ python server.py           # Runs on localhost:8080
 
 ---
 
-## 📺 Learn More
+## Customize Your Team
 
-- **Watch the full demo:** [YouTube video →](https://youtu.be/c5DdXzqaeVU?si=rM2CNaZ8qVwMvqmz)
-- **Multi-agent framework:** [Agency Swarm](https://github.com/VRSEN/agency-swarm)
-- **External integrations:** [Composio](https://composio.dev)
+Fork this repo and modify agents for your specific needs:
+
+- Change `instructions.md` in each agent folder to adjust behavior
+- Add tools in each agent's `tools/` folder
+- Update `swarm.py` to add/remove agents or change communication flows
+
+**Example customizations:**
+
+- **Mobile Dev Team:** Replace Frontend Dev with iOS/Android specialists
+- **Data Engineering Team:** Add data pipeline and ML specialists
+- **Security Team:** Add penetration testing and compliance agents
 
 ---
 
-## 📄 License
+## Learn More
+
+- **Multi-agent framework:** [Agency Swarm](https://github.com/VRSEN/agency-swarm)
+
+---
+
+## License
 
 MIT — see [LICENSE](LICENSE).
 
-**Built with ❤️ by the team behind [Agency Swarm](https://github.com/VRSEN/agency-swarm)**
+**Built with Agency Swarm**
