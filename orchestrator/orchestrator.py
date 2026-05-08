@@ -11,8 +11,8 @@ def create_orchestrator() -> Agent:
     return Agent(
         name="Orchestrator",
         description=(
-            "Primary coordinator that plans multi-agent workflows, runs independent workstreams in parallel, "
-            "and hands off to a specialist when tight user iteration is needed."
+            "Primary coordinator for trading, portfolio management, market research, risk, quant analysis, "
+            "and IBKR execution workflows."
         ),
         instructions="./instructions.md",
         model=get_default_model(),
@@ -20,10 +20,10 @@ def create_orchestrator() -> Agent:
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
         ),
         conversation_starters=[
-            "What can this agency do?",
-            "Build a full launch package: research, slides, docs, and creative assets.",
-            "Analyze my data and then turn insights into a polished executive deck.",
-            "Coordinate a workflow for proposal doc + promo visuals + short product video.",
+            "Check what trading APIs and market-data subscriptions are available.",
+            "Review my IBKR portfolio and suggest risk-adjusted trade priorities.",
+            "Research and backtest a trade idea before order preview.",
+            "Build daily, swing, medium-term, and long-term trading workflows.",
         ],
     )
 
