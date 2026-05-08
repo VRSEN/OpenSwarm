@@ -3,19 +3,11 @@
 from pathlib import Path
 from typing import Literal
 
-import html2text
 from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_file_from_path
-from bs4 import BeautifulSoup
 from pydantic import Field
-from weasyprint import HTML
-
-from .CreateDocument import CreateDocument
-from .utils.html_docx_core import html_to_docx
-from .utils.html_docx_images import embed_local_images
-from .utils.html_docx_playwright import auto_page_breaks
 
 # Base directory for all document files
-from .utils.doc_file_utils import get_project_dir, next_docx_version
+from .utils.doc_file_utils import get_project_dir, next_docx_version, normalize_document_name
 
 # Characters that PDF fonts commonly lack glyphs for.
 # Includes both proper Unicode typographic chars and ASCII control-char
@@ -42,6 +34,30 @@ _UNICODE_TO_ASCII = str.maketrans({
 
 def _normalize_unicode(html: str) -> str:
     return html.translate(_UNICODE_TO_ASCII)
+
+
+def _load_weasyprint_html():
+    try:
+        from weasyprint import HTML
+    except (ImportError, OSError) as exc:
+        raise RuntimeError(
+            "PDF export requires WeasyPrint and its native system libraries. "
+            "Install the WeasyPrint platform dependencies, then retry PDF export. "
+            f"Original error: {exc}"
+        ) from exc
+    return HTML
+
+
+def _embed_local_images(html_content: str, project_dir: Path) -> str:
+    from .utils.html_docx_images import embed_local_images
+
+    return embed_local_images(html_content, project_dir)
+
+
+def _auto_page_breaks(html_content: str) -> str:
+    from .utils.html_docx_playwright import auto_page_breaks
+
+    return auto_page_breaks(html_content)
 
 
 class ConvertDocument(BaseTool):
@@ -95,11 +111,7 @@ class ConvertDocument(BaseTool):
             if not project_dir.exists():
                 return f"Error: Project '{self.project_name}' not found."
 
-            doc_name = (
-                self.document_name.replace(".html", "")
-                .replace(".docx", "")
-                .replace(".md", "")
-            )
+            doc_name = normalize_document_name(self.document_name)
             source_path = project_dir / f"{doc_name}.source.html"
 
             if not source_path.exists():
@@ -124,9 +136,9 @@ class ConvertDocument(BaseTool):
                 )
 
             html_content = source_path.read_text(encoding="utf-8")
-            html_content = embed_local_images(html_content, project_dir)
             if self.output_format in ("pdf", "docx"):
-                html_content = auto_page_breaks(html_content)
+                html_content = _embed_local_images(html_content, project_dir)
+                html_content = _auto_page_breaks(html_content)
 
             if self.output_format == "pdf":
                 self._convert_to_pdf(html_content, output_path)
@@ -169,14 +181,19 @@ Path: {output_path}"""
     
     def _convert_to_pdf(self, html_content: str, output_path: Path):
         """Convert HTML to PDF using weasyprint."""
+        HTML = _load_weasyprint_html()
         HTML(string=_normalize_unicode(html_content)).write_pdf(output_path)
 
     def _convert_to_docx(self, html_content: str, output_path: Path):
         """Convert HTML to DOCX using the internal converter."""
+        from .utils.html_docx_core import html_to_docx
+
         html_to_docx(html_content, output_path)
     
     def _convert_to_markdown(self, html_content: str, output_path: Path):
         """Convert HTML to Markdown."""
+        import html2text
+
         converter = html2text.HTML2Text()
         converter.body_width = 0  # Don't wrap text
         markdown = converter.handle(html_content)
@@ -184,12 +201,16 @@ Path: {output_path}"""
     
     def _convert_to_txt(self, html_content: str, output_path: Path):
         """Convert HTML to plain text."""
+        from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html_content, "html.parser")
         text = soup.get_text(separator="\n", strip=True)
         output_path.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":
+    from .CreateDocument import CreateDocument
+
     print("=" * 70)
     print("TEST: ConvertDocument Tool")
     print("=" * 70)
