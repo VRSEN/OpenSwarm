@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login · OpenSwarm Enterprise</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="login">
+    <form class="login-box" onsubmit="login(event)">
+      <div class="brand"><span class="mark"></span><span>OpenSwarm Enterprise</span></div>
+      <p class="muted">Sign in to manage agents, runs, integrations, and audit controls.</p>
+      <div class="form-row">
+        <label>Email</label>
+        <input name="email" type="email" value="admin@openswarm.local" required>
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input name="password" type="password" value="ChangeMe123!" required>
+      </div>
+      <button class="button primary" type="submit">Sign in</button>
+    </form>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

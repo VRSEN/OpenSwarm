@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="grid stats">
+  <div class="card stat"><span class="muted">Total runs</span><strong data-runs>0</strong></div>
+  <div class="card stat"><span class="muted">Completed</span><strong data-completed>0</strong></div>
+  <div class="card stat"><span class="muted">Estimated cost</span><strong data-cost>$0.00</strong></div>
+  <div class="card stat"><span class="muted">Approval gates</span><strong>On</strong></div>
+</section>
+<section class="panel" style="margin-top:14px">
+  <div class="toolbar"><strong>Recent swarm runs</strong></div>
+  <table><thead><tr><th>Prompt</th><th>State</th><th>Created</th><th>Summary</th></tr></thead><tbody data-runs-table></tbody></table>
+</section>
+{% endblock %}
+

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <form class="panel" onsubmit="saveSecret(event)">
+    <div class="toolbar"><strong>Provider key</strong></div>
+    <div class="form-row">
+      <select name="provider">
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="google">Google</option>
+        <option value="fal">fal.ai</option>
+        <option value="search">Search API</option>
+        <option value="composio">Composio</option>
+      </select>
+    </div>
+    <div class="form-row"><input name="value" type="password" placeholder="API key" required></div>
+    <div class="form-row">
+      <select name="scope"><option value="organization">Organization</option><option value="user">Current user</option></select>
+    </div>
+    <button class="button primary" type="submit">Save encrypted key</button>
+  </form>
+  <div class="panel">
+    <strong>Configured secrets</strong>
+    <table><thead><tr><th>Provider</th><th>Key</th><th>Scope</th></tr></thead><tbody data-secrets></tbody></table>
+  </div>
+</section>
+{% endblock %}
+

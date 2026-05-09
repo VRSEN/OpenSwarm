@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <form class="panel" onsubmit="createRun(event)">
+    <div class="toolbar"><strong>Create swarm run</strong></div>
+    <div class="form-row"><textarea name="prompt" placeholder="Ask the OpenSwarm team to create a deliverable..." required></textarea></div>
+    <button class="button primary" type="submit">Start run</button>
+  </form>
+  <div class="panel">
+    <strong>Lifecycle controls</strong>
+    <p class="muted">Runs are persisted as queued, running, waiting_for_input, completed, failed, or cancelled. Video and other expensive prompts pause for approval.</p>
+  </div>
+</section>
+<section class="panel" style="margin-top:14px">
+  <table><thead><tr><th>Prompt</th><th>State</th><th>Created</th><th>Summary</th></tr></thead><tbody data-runs-table></tbody></table>
+</section>
+{% endblock %}
+

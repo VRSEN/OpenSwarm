@@ -30,7 +30,14 @@
         "package-lock.json"
     ],
     "scripts": {
-        "postinstall": "node -e \"const fs=require('fs');const path=require('path');const cp=require('child_process');const pkg=__dirname;const patchTarget=path.join(pkg,'node_modules','dom-to-pptx');const patchCli=path.join(pkg,'node_modules','patch-package','index.js');if(fs.existsSync(patchTarget)&&fs.existsSync(patchCli)){cp.execFileSync(process.execPath,[patchCli],{cwd:pkg,stdio:'inherit'});}try{fs.chmodSync(path.join(pkg,'bin','openswarm'),0o755)}catch(e){}\""
+        "postinstall": "node -e \"const fs=require('fs');const path=require('path');const cp=require('child_process');const pkg=__dirname;const patchTarget=path.join(pkg,'node_modules','dom-to-pptx');const patchCli=path.join(pkg,'node_modules','patch-package','index.js');if(fs.existsSync(patchTarget)&&fs.existsSync(patchCli)){cp.execFileSync(process.execPath,[patchCli],{cwd:pkg,stdio:'inherit'});}try{fs.chmodSync(path.join(pkg,'bin','openswarm'),0o755)}catch(e){}\"",
+        "dev": "python server.py",
+        "start": "python server.py",
+        "enterprise:dev": "set OPENSWARM_ENTERPRISE=true&& python server.py",
+        "enterprise:migrate": "python scripts/migrate.py",
+        "enterprise:seed": "python scripts/seed_enterprise.py",
+        "test": "pytest",
+        "lint": "python -m compileall enterprise scripts tests"
     },
     "dependencies": {
         "@vrsen/agentswarm": "latest",

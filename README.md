@@ -6,6 +6,8 @@
 
 </div>
 
+> **Enterprise edition:** this fork adds a multi-tenant dashboard, REST API, RBAC, durable runs, encrypted provider keys, audit logs, usage records, and Docker deployment. See [docs/enterprise.md](docs/enterprise.md).
+
 **The fully open-source multi-agent system that does everything Claude Code can't.**
 
 Create polished slide decks, research reports, data visualizations, documents, images, and videos — all from a single prompt in your terminal. No platform, no UI, no setup hassles.
@@ -160,3 +162,4 @@ python server.py           # Runs on localhost:8080
 MIT — see [LICENSE](LICENSE).
 
 **Built with ❤️ by the team behind [Agency Swarm](https://github.com/VRSEN/agency-swarm)**
+<!-- Enterprise edition note: see docs/enterprise.md for the multi-tenant dashboard, REST API, RBAC, durable runs, encrypted secrets, audit logs, and Docker deployment added in this fork. -->

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <div class="toolbar"><a class="button" href="/api/audit/export.csv">Export CSV</a></div>
+  <table><thead><tr><th>Time</th><th>Action</th><th>Resource</th><th>Actor</th></tr></thead><tbody data-audit></tbody></table>
+</section>
+{% endblock %}
+

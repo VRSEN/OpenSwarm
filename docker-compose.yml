@@ -8,3 +8,60 @@ services:
     volumes:
       - ./mnt:/app/mnt
       - ./uploads:/app/uploads
+
+  enterprise-api:
+    profiles:
+      - enterprise
+    build: .
+    command: python -u server.py
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.enterprise
+    environment:
+      OPENSWARM_ENTERPRISE: "true"
+      DATABASE_URL: postgresql+psycopg://openswarm:openswarm@postgres:5432/openswarm_enterprise
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./mnt:/app/mnt
+      - ./uploads:/app/uploads
+
+  enterprise-worker:
+    profiles:
+      - enterprise
+    build: .
+    command: python -u -m enterprise.worker
+    env_file:
+      - .env.enterprise
+    environment:
+      OPENSWARM_ENTERPRISE: "true"
+      DATABASE_URL: postgresql+psycopg://openswarm:openswarm@postgres:5432/openswarm_enterprise
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./mnt:/app/mnt
+      - ./uploads:/app/uploads
+
+  postgres:
+    profiles:
+      - enterprise
+    image: postgres:16
+    environment:
+      POSTGRES_DB: openswarm_enterprise
+      POSTGRES_USER: openswarm
+      POSTGRES_PASSWORD: openswarm
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    profiles:
+      - enterprise
+    image: redis:7-alpine
+
+volumes:
+  postgres-data:
