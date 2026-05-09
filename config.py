@@ -8,6 +8,43 @@ def get_default_model(fallback: str = "gpt-5.2"):
     return _resolve(model)
 
 
+def is_router_mode() -> bool:
+    """True when a local OpenAI-compatible router is in front of us."""
+    return bool(os.getenv("OPENAI_BASE_URL"))
+
+
+def filter_hosted_tools(tools: list) -> list:
+    """Drop OpenAI-hosted tools (WebSearchTool, FileSearchTool, etc.) when
+    the model is reached via Chat Completions — hosted tools only run on
+    the Responses API and against api.openai.com.
+
+    In router mode we use Chat Completions, so a hosted tool would raise
+    'Hosted tools are not supported with the ChatCompletions API'.
+    """
+    if not is_router_mode():
+        return tools
+    try:
+        from agents.tool import (  # noqa: PLC0415
+            WebSearchTool,
+            FileSearchTool,
+            HostedMCPTool,
+            ImageGenerationTool,
+            CodeInterpreterTool,
+            ComputerTool,
+        )
+        hosted_types = (
+            WebSearchTool,
+            FileSearchTool,
+            HostedMCPTool,
+            ImageGenerationTool,
+            CodeInterpreterTool,
+            ComputerTool,
+        )
+    except ImportError:
+        return tools
+    return [t for t in tools if not isinstance(t, hosted_types)]
+
+
 def is_openai_provider() -> bool:
     """Return True only for plain OpenAI usage (no custom base, no LiteLLM).
 

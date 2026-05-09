@@ -7,7 +7,7 @@ from agency_swarm.tools import (
 from openai.types.shared import Reasoning
 from dotenv import load_dotenv
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, filter_hosted_tools
 from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
 load_dotenv()
@@ -28,7 +28,7 @@ def create_virtual_assistant() -> Agent:
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
-        tools=[
+        tools=filter_hosted_tools([
             WebSearchTool(),
             PersistentShellTool,
             IPythonInterpreter,
@@ -37,7 +37,7 @@ def create_virtual_assistant() -> Agent:
             FindTools,
             ManageConnections,
             SearchTools,
-        ],
+        ]),
         conversation_starters=[
             "Send a summary of my unread emails to Slack.",
             "Schedule a meeting with my team for next Monday.",
