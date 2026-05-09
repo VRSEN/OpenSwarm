@@ -128,7 +128,7 @@ class ClaudeOAuthModel(Model):
         response = await self._client.messages.create(**kwargs)
         return _anthropic_response_to_model_response(response)
 
-    async def stream_response(
+    def stream_response(
         self,
         system_instructions: str | None,
         input: str | list[Any],
@@ -142,11 +142,10 @@ class ClaudeOAuthModel(Model):
         conversation_id: str | None = None,
         prompt: Any | None = None,
     ) -> AsyncIterator[Any]:
-        # Best-effort: drive Anthropic's streaming, but fall back to a
-        # single-shot response wrapped in synthetic events. Real per-token
-        # streaming requires emitting the right TResponseStreamEvent variants
-        # which are intricate; this keeps the TUI functional.
-        result = await self.get_response(
+        # The SDK calls `async for event in stream_response(...)` so this
+        # must return an async iterator (NOT a coroutine that resolves to
+        # one). Define an inner async generator and return it un-awaited.
+        return self._stream_iter(
             system_instructions,
             input,
             model_settings,
@@ -159,11 +158,101 @@ class ClaudeOAuthModel(Model):
             prompt=prompt,
         )
 
-        async def _gen() -> AsyncIterator[Any]:
-            for event in _model_response_to_stream_events(result):
-                yield event
+    async def _stream_iter(
+        self,
+        system_instructions: str | None,
+        input: str | list[Any],
+        model_settings: ModelSettings,
+        tools: list[Tool],
+        output_schema: Any | None,
+        handoffs: list[Handoff],
+        tracing: ModelTracing,
+        *,
+        previous_response_id: str | None = None,
+        conversation_id: str | None = None,
+        prompt: Any | None = None,
+    ) -> AsyncIterator[Any]:
+        # Best-effort streaming: drive Anthropic's native stream and emit
+        # text-delta + completed events so the TUI renders text live and
+        # the SDK can extract the final ModelResponse on completion.
+        messages = _input_to_anthropic_messages(input)
+        system = _build_system_prompt(system_instructions, output_schema)
+        anthropic_tools = _tools_to_anthropic(tools, handoffs)
 
-        return _gen()
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": getattr(model_settings, "max_tokens", None) or self._max_tokens,
+            "system": system,
+            "messages": messages,
+        }
+        if anthropic_tools:
+            kwargs["tools"] = anthropic_tools
+        temperature = getattr(model_settings, "temperature", None)
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+
+        seq = 0
+
+        def _next() -> int:
+            nonlocal seq
+            seq += 1
+            return seq
+
+        # Lazy-import event types: model_construct() bypasses Pydantic
+        # validation so we don't have to fully populate every field.
+        try:
+            from openai.types.responses import (  # noqa: PLC0415
+                ResponseTextDeltaEvent,
+                ResponseCompletedEvent,
+                Response,
+            )
+            have_event_types = True
+        except ImportError:
+            have_event_types = False
+
+        async with self._client.messages.stream(**kwargs) as stream:
+            async for event in stream:
+                etype = getattr(event, "type", None)
+                if etype == "content_block_delta":
+                    delta = getattr(event, "delta", None)
+                    delta_type = getattr(delta, "type", None)
+                    if delta_type == "text_delta" and have_event_types:
+                        text = getattr(delta, "text", "") or ""
+                        if not text:
+                            continue
+                        yield ResponseTextDeltaEvent.model_construct(
+                            type="response.output_text.delta",
+                            delta=text,
+                            item_id=getattr(event, "index", 0) and f"item_{event.index}" or "item_0",
+                            output_index=int(getattr(event, "index", 0) or 0),
+                            content_index=0,
+                            sequence_number=_next(),
+                        )
+                # We ignore content_block_start/stop, message_start/stop —
+                # the final ResponseCompletedEvent below carries everything
+                # the SDK needs to reconstruct the result.
+
+            final = await stream.get_final_message()
+
+        result = _anthropic_response_to_model_response(final)
+
+        if have_event_types:
+            yield ResponseCompletedEvent.model_construct(
+                type="response.completed",
+                sequence_number=_next(),
+                response=Response.model_construct(
+                    id=result.response_id,
+                    object="response",
+                    created_at=0.0,
+                    model=self._model,
+                    output=result.output,
+                    parallel_tool_calls=False,
+                    tool_choice="auto",
+                    tools=[],
+                    status="completed",
+                    usage=None,
+                ),
+            )
 
 
 # ── translation helpers ──────────────────────────────────────────────────
