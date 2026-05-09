@@ -97,21 +97,31 @@ They'll automatically customize all agents for your use case.
 
 ## ⚙️ API Keys & Setup
 
-The setup wizard walks you through everything, but you'll need at least one of these:
+The setup wizard walks you through everything, but you'll need at least one of these.
 
-**Required (choose one):**
+**Pick a primary provider (one required):**
 
-- `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
-- `ANTHROPIC_API_KEY` - For Claude models
+- `OPENAI_API_KEY` — GPT 5.x and Sora video generation
+- `ANTHROPIC_API_KEY` — Claude models
+- `GOOGLE_API_KEY` — Gemini models (also drives image gen + Veo video)
+- **Azure OpenAI Service** — `AZURE_API_KEY` + `AZURE_API_BASE` + `AZURE_API_VERSION` for your own GPT deployment
+- **Azure AI Foundry** — `AZURE_AI_API_KEY` + `AZURE_AI_API_BASE` for the catalog (Claude on Azure, Llama, Mistral, DeepSeek, ...)
+- **Ollama (local)** — no key required; defaults to `http://localhost:11434`
+- **OpenAI-compatible** — `OPENAI_COMPAT_API_KEY` + `OPENAI_COMPAT_API_BASE` for Ollama Cloud, Groq, Together AI, Mistral La Plateforme, OpenRouter, vLLM
+
+Switching providers mid-session: ask the orchestrator "switch to ollama llama3.1" (or any other slug + model) — it routes to the `SwitchProvider` tool, writes the new `DEFAULT_MODEL` to `.env`, and on next TUI exit OpenSwarm restarts with the new provider.
 
 **Optional superpowers:**
 
-- `COMPOSIO_API_KEY` - Unlock 10,000+ integrations (Gmail, Slack, GitHub, etc.)
-- `GOOGLE_API_KEY` - Gemini image generation + Veo video
-- `FAL_KEY` - Advanced video editing and effects
-- `SEARCH_API_KEY` - Web search for research agent
+- `COMPOSIO_API_KEY` — Unlock 10,000+ integrations (Gmail, Slack, GitHub, etc.)
+- `FAL_KEY` — Advanced video editing and effects
+- `SEARCH_API_KEY` — Web search for research agent
 
 Tools gracefully degrade when keys are missing — you'll get clear instructions on what to add.
+
+### Upgrading from an earlier version
+
+If you already have a `.env` from before the multi-provider work, nothing breaks. Existing `DEFAULT_MODEL` values keep working: bare strings like `gpt-5.2` route to OpenAI directly, and `litellm/<model>` strings still route through LiteLLM. The wizard adds new variables for Azure, Ollama, and OpenAI-compatible setups; old keys stay in place. Re-run `python onboard.py` whenever you want to register a new provider.
 
 ---
 
