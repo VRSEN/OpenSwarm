@@ -1,19 +1,23 @@
 """Switch the agency's LLM provider at runtime.
 
-Writes DEFAULT_MODEL atomically to .env and signals run_utils.main() to
-recreate the agency on the next TUI loop iteration. The user must exit the
-TUI (`/quit` or Ctrl-C) for the switch to take effect — restart is automatic
-from there.
+Writes DEFAULT_MODEL atomically to .env, reloads the new values into the
+running process's environment, and (best-effort) signals run_utils.main()
+to refresh the TUI on next loop iteration.
+
+Why this works for both surfaces:
+  - FastAPI: agency-swarm's request handlers call create_agency per-request
+    (see agency_swarm/integrations/fastapi_utils/endpoint_handlers.py). Each
+    rebuild reads os.environ, so the load_dotenv(override=True) call below
+    makes the next request pick up the switch with no process restart.
+  - TUI: run_utils.main() runs the TUI in a while-loop watching the flag;
+    on /quit, it reloads .env and rebuilds the agency. The flag isn't
+    strictly required for correctness anymore — env vars are already live
+    in-process — but touching it gives the TUI a clean restart UX.
 
 Lives under orchestrator/tools/ rather than shared_tools/ because it
 deliberately sits outside the orchestrator's "router only" contract — see
 orchestrator/instructions.md for the documented carve-out. Specialist agents
 should never have access to this tool.
-
-NOTE: Provider switching only takes effect when running through
-run_utils.main() (i.e. `python swarm.py` or the npm CLI). The FastAPI server
-in server.py does not re-read DEFAULT_MODEL at runtime — switching from an
-API client will appear to succeed but is a no-op for that surface.
 
 Pre-existing provider credentials in .env are reused. To register new
 credentials, run `python onboard.py`.
@@ -25,7 +29,7 @@ import urllib.parse
 from pathlib import Path
 
 from agency_swarm.tools import BaseTool
-from dotenv import dotenv_values, set_key
+from dotenv import dotenv_values, load_dotenv, set_key
 from pydantic import Field
 
 from config import PROVIDER_REGISTRY
@@ -137,34 +141,11 @@ class SwitchProvider(BaseTool):
 
         new_default_model = f"{prefix}{self.model}"
 
-        # Touch the restart flag BEFORE rewriting .env. Reasoning:
-        #
-        # If we wrote .env first and were killed between the write and the
-        # flag touch, the user would see "Provider switched" (already
-        # returned), .env would carry the new model, but the TUI loop in
-        # run_utils.main() would never pick it up — silent half-state.
-        #
-        # Touching the flag first means: if .env write fails afterward, the
-        # next loop iteration just re-reads the unchanged .env (one extra
-        # restart, no harm). If .env write succeeds, the flag is already in
-        # place. Order matters here.
-        flag_path = os.environ.get(SWITCH_FLAG_VAR)
-        if not flag_path:
-            return (
-                "Cannot switch — no restart signal available. This tool only "
-                "works when running through the OpenSwarm TUI loop "
-                "(`python swarm.py` or the npm CLI), not the FastAPI server."
-            )
-        try:
-            Path(flag_path).touch()
-        except OSError as exc:
-            return f"Refusing switch: could not write restart flag ({exc})."
-
-        # set_key on a temp copy + os.replace gives us atomic .env replacement
-        # on POSIX, so a concurrent reader can't see a half-written file.
-        # We deliberately rewrite the *whole* file via the temp rather than
-        # set_key-ing the live .env, since python-dotenv's set_key is not
-        # crash-safe on its own.
+        # 1. Atomic .env write. set_key on a temp copy + os.replace gives
+        #    atomic .env replacement on POSIX so a concurrent reader can't
+        #    see a half-written file. We rewrite the whole file via the temp
+        #    rather than set_key-ing the live .env, since python-dotenv's
+        #    set_key is not crash-safe on its own.
         if not ENV_PATH.exists():
             ENV_PATH.write_text("", encoding="utf-8")
         tmp_path = ENV_PATH.with_suffix(ENV_PATH.suffix + ".tmp")
@@ -173,13 +154,28 @@ class SwitchProvider(BaseTool):
             set_key(str(tmp_path), "DEFAULT_MODEL", new_default_model)
             os.replace(str(tmp_path), str(ENV_PATH))
         finally:
-            # Clean up the temp on the failure path; on success os.replace
-            # already consumed it (Path.exists() returns False then).
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
 
+        # 2. Refresh os.environ from the freshly written .env. This is what
+        #    makes FastAPI work — agency-swarm rebuilds the agency on every
+        #    request, reading the new DEFAULT_MODEL right away. For the TUI,
+        #    it's redundant with the load_dotenv(override=True) the restart
+        #    loop already does, but harmless.
+        load_dotenv(str(ENV_PATH), override=True)
+
+        # 3. Best-effort: signal the TUI restart loop. The switch already
+        #    applies in-process via step 2; the flag is just a UX cue for the
+        #    TUI to refresh its display state. Harmless in FastAPI mode.
+        flag_path = os.environ.get(SWITCH_FLAG_VAR)
+        if flag_path:
+            try:
+                Path(flag_path).touch()
+            except OSError:
+                pass  # Non-fatal — env reload already applied the switch.
+
         return (
             f"Provider switched to {slug} (DEFAULT_MODEL={new_default_model}).\n"
-            "Exit the TUI (`/quit` or Ctrl-C) and OpenSwarm will automatically "
-            "restart with the new provider."
+            "The change is live for subsequent agency builds. If running in "
+            "the TUI, exit (`/quit` or Ctrl-C) to refresh the display."
         )

@@ -1,11 +1,10 @@
 # FastAPI entry point — run with: python server.py
 #
-# NOTE: This entry point creates the agency once at startup and serves it
-# for the lifetime of the process. The SwitchProvider tool registered on
-# the orchestrator writes to .env and signals a restart, but only the TUI
-# loop in run_utils.main() reads that signal — the FastAPI surface does
-# not. Provider switches issued through this server appear to succeed but
-# stay pinned to the original DEFAULT_MODEL until the server is restarted.
+# Provider switching at runtime: the SwitchProvider tool on the orchestrator
+# rewrites .env and reloads os.environ in this process. Agency-swarm rebuilds
+# the agency on every chat/run request, so subsequent requests pick up the
+# new DEFAULT_MODEL automatically — no server restart required. In-flight
+# requests keep their existing agency until they finish.
 
 import logging
 from dotenv import load_dotenv

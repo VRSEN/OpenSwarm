@@ -105,6 +105,42 @@ def test_successful_switch_writes_env_and_touches_flag(
     assert dotenv_values(str(env_path)).get("DEFAULT_MODEL") == "gpt-5.2"
 
 
+def test_switch_refreshes_os_environ_for_fastapi_path(
+    env_path, flag_path, monkeypatch
+):
+    """The FastAPI runtime-switching guarantee: after run() returns, a
+    subsequent agency build (which reads os.environ) sees the new
+    DEFAULT_MODEL. This is the core change that turns runtime switching
+    into a working feature on the API surface."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("DEFAULT_MODEL", "old-model-pre-switch")
+    SwitchProvider(provider="openai", model="gpt-5.2").run()
+    # The reload must have updated os.environ in this process.
+    assert os.environ["DEFAULT_MODEL"] == "gpt-5.2"
+
+
+def test_switch_refreshes_provider_credentials_in_environ(
+    env_path, flag_path, monkeypatch
+):
+    """When the user switches to a provider whose creds were already in
+    .env (pre-onboarded but not exported to the shell), os.environ should
+    pick those up too — the next agency build needs them."""
+    # Pre-populate .env with the target provider's credentials
+    env_path.write_text(
+        "AZURE_API_KEY=preset-key\n"
+        "AZURE_API_BASE=https://preset.openai.azure.com\n"
+        "AZURE_API_VERSION=2024-08-01-preview\n",
+        encoding="utf-8",
+    )
+    # Strip them from os.environ so we know the reload populated them
+    for var in ("AZURE_API_KEY", "AZURE_API_BASE", "AZURE_API_VERSION"):
+        monkeypatch.delenv(var, raising=False)
+
+    SwitchProvider(provider="azure", model="my-deployment").run()
+    assert os.environ.get("AZURE_API_KEY") == "preset-key"
+    assert os.environ.get("AZURE_API_BASE") == "https://preset.openai.azure.com"
+
+
 def test_openai_compat_writes_correct_default_model(
     env_path, flag_path, monkeypatch
 ):
@@ -126,21 +162,24 @@ def test_atomic_write_leaves_no_tmp_file(env_path, flag_path, monkeypatch):
     assert not tmp.exists(), ".env.tmp left over after atomic write"
 
 
-def test_no_flag_env_var_refuses_switch(env_path, monkeypatch):
-    """When OPENSWARM_SWITCH_FLAG isn't set the tool must refuse outright,
-    not write .env and pretend it succeeded — flag is touched BEFORE the
-    .env mutation by design."""
+def test_no_flag_env_var_still_succeeds(env_path, monkeypatch):
+    """FastAPI mode has no OPENSWARM_SWITCH_FLAG — the tool must still
+    succeed, since env reload alone is enough for agency-swarm's
+    per-request rebuild to pick up the change."""
     monkeypatch.delenv("OPENSWARM_SWITCH_FLAG", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     result = SwitchProvider(provider="openai", model="gpt-5.2").run()
-    assert "Cannot switch" in result
-    # .env must NOT have been mutated — the new ordering enforces this.
-    assert dotenv_values(str(env_path)).get("DEFAULT_MODEL") in (None, "")
+    assert "switched" in result.lower()
+    # .env was rewritten
+    assert dotenv_values(str(env_path)).get("DEFAULT_MODEL") == "gpt-5.2"
+    # And os.environ was refreshed in-process — this is the key behavior
+    # that makes FastAPI runtime switching work.
+    assert os.environ["DEFAULT_MODEL"] == "gpt-5.2"
 
 
-def test_oserror_on_flag_touch_aborts_switch(env_path, flag_path, monkeypatch):
-    """If the flag can't be written (disk full, permissions), the tool
-    must refuse before touching .env."""
+def test_oserror_on_flag_touch_does_not_abort_switch(env_path, flag_path, monkeypatch):
+    """A failing flag touch is best-effort — the env reload already applied
+    the switch, so the tool reports success rather than refusing."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
     def boom(self):
@@ -148,10 +187,11 @@ def test_oserror_on_flag_touch_aborts_switch(env_path, flag_path, monkeypatch):
 
     monkeypatch.setattr(Path, "touch", boom)
     result = SwitchProvider(provider="openai", model="gpt-5.2").run()
-    assert "Refusing switch" in result
-    assert "disk full" in result
-    # .env must NOT have been mutated.
-    assert dotenv_values(str(env_path)).get("DEFAULT_MODEL") in (None, "")
+    assert "switched" in result.lower()
+    # .env was rewritten despite the flag failure
+    assert dotenv_values(str(env_path)).get("DEFAULT_MODEL") == "gpt-5.2"
+    # And os.environ reflects the switch
+    assert os.environ["DEFAULT_MODEL"] == "gpt-5.2"
 
 
 def test_atomic_write_recovers_when_set_key_fails(env_path, flag_path, monkeypatch):

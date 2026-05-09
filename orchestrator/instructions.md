@@ -99,6 +99,6 @@ Pass:
 
 `openai_compat` is the generic route for any OpenAI-compatible endpoint (Ollama Cloud, Groq, Together AI, Mistral La Plateforme, OpenRouter, vLLM-based servers). It uses dedicated `OPENAI_COMPAT_API_KEY` / `OPENAI_COMPAT_API_BASE` env vars, so a real `OPENAI_API_KEY` set elsewhere is left intact.
 
-After the tool returns, tell the user to exit the TUI (`/quit` or Ctrl-C) — OpenSwarm will automatically restart with the new provider.
+After the tool returns, the change is live: subsequent chat requests use the new provider. In the TUI, the user can exit (`/quit` or Ctrl-C) to refresh the display state. From the FastAPI server, no action is required — the next request rebuilds the agency with the new model automatically.
 
 If the tool reports missing credentials, tell the user to run `python onboard.py` to register them, then retry.
