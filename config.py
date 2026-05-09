@@ -14,18 +14,44 @@ def is_router_mode() -> bool:
 
 
 def is_oauth_mode() -> bool:
-    """True when ANTHROPIC_BASE_URL points at a local router that
-    authenticates against the Claude Pro/Max/Claude Code subscription
-    on our behalf (9router, CLIProxyAPI, ccproxy, ...).
+    """True when we should route through the local `claude` CLI via
+    claude_agent_sdk (Claude Pro/Max/Claude Code subscription).
 
-    Also returns True when CLAUDE_CODE_OAUTH_TOKEN is set (legacy alias).
+    Triggers in priority order:
+      1. CLAUDE_USE_AGENT_SDK=1 explicitly.
+      2. ANTHROPIC_BASE_URL set (legacy router compat).
+      3. CLAUDE_CODE_OAUTH_TOKEN set or ANTHROPIC_API_KEY starts with
+         sk-ant-oat (legacy aliases).
+      4. claude-agent-sdk is installed AND DEFAULT_MODEL looks like a
+         Claude id and no other backend is configured — auto-detect
+         path so the default workflow "just works" for users with the
+         claude CLI logged in.
     """
+    if os.getenv("CLAUDE_USE_AGENT_SDK", "").lower() in ("1", "true", "yes"):
+        return True
     if os.getenv("ANTHROPIC_BASE_URL"):
         return True
     if os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
         return True
     key = os.getenv("ANTHROPIC_API_KEY", "")
-    return key.startswith("sk-ant-oat")
+    if key.startswith("sk-ant-oat"):
+        return True
+
+    # Auto-detect: if the user has claude_agent_sdk installed AND has
+    # asked for a Claude model AND has not configured any other
+    # backend, default to the SDK path.
+    if os.getenv("OPENAI_BASE_URL"):
+        return False
+    if key:  # explicit ANTHROPIC_API_KEY → use direct Anthropic
+        return False
+    raw = os.getenv("DEFAULT_MODEL", "")
+    if not raw.lower().startswith(("claude", "cc/")):
+        return False
+    try:
+        import claude_agent_sdk  # noqa: F401, PLC0415
+        return True
+    except ImportError:
+        return False
 
 
 def is_openai_provider() -> bool:
@@ -100,15 +126,18 @@ def _resolve(model: str):
          → LiteLLM via LitellmModel.
       4. Everything else (gpt-5.2, o3, ...) → returned unchanged for OpenAI.
     """
-    # OAuth/router mode: anthropic SDK pointed at a local router that
-    # authenticates against the Claude subscription. Pass the model id
-    # through unchanged so the router can route by its own prefix
-    # (cc/..., cx/..., gc/...).
+    # OAuth mode: route through the local `claude` CLI via
+    # claude_agent_sdk so we use the user's subscription auth.
+    # Strip 'cc/' / 'litellm/anthropic/' prefixes — the SDK wants the
+    # bare Anthropic model id.
     if is_oauth_mode():
-        bare = model[len("litellm/"):] if model.startswith("litellm/") else model
+        bare = model
+        for prefix in ("litellm/", "anthropic/", "cc/"):
+            if bare.startswith(prefix):
+                bare = bare[len(prefix):]
         try:
-            from claude_oauth_model import ClaudeRouterModel  # noqa: PLC0415
-            return ClaudeRouterModel(model=bare)
+            from claude_oauth_model import ClaudeAgentSDKModel  # noqa: PLC0415
+            return ClaudeAgentSDKModel(model=bare)
         except ImportError:
             return bare
 
