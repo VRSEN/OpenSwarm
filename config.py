@@ -14,8 +14,14 @@ def is_router_mode() -> bool:
 
 
 def is_oauth_mode() -> bool:
-    """True when we are calling Anthropic directly with a Claude Code
-    subscription OAuth token via ClaudeOAuthModel."""
+    """True when ANTHROPIC_BASE_URL points at a local router that
+    authenticates against the Claude Pro/Max/Claude Code subscription
+    on our behalf (9router, CLIProxyAPI, ccproxy, ...).
+
+    Also returns True when CLAUDE_CODE_OAUTH_TOKEN is set (legacy alias).
+    """
+    if os.getenv("ANTHROPIC_BASE_URL"):
+        return True
     if os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
         return True
     key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -94,16 +100,15 @@ def _resolve(model: str):
          → LiteLLM via LitellmModel.
       4. Everything else (gpt-5.2, o3, ...) → returned unchanged for OpenAI.
     """
-    # OAuth mode: direct Anthropic with subscription token.
+    # OAuth/router mode: anthropic SDK pointed at a local router that
+    # authenticates against the Claude subscription. Pass the model id
+    # through unchanged so the router can route by its own prefix
+    # (cc/..., cx/..., gc/...).
     if is_oauth_mode():
-        # Strip any router/litellm prefix the user might have copied in.
-        bare = model
-        for prefix in ("litellm/", "anthropic/", "cc/", "cx/"):
-            if bare.startswith(prefix):
-                bare = bare[len(prefix):]
+        bare = model[len("litellm/"):] if model.startswith("litellm/") else model
         try:
-            from claude_oauth_model import ClaudeOAuthModel  # noqa: PLC0415
-            return ClaudeOAuthModel(model=bare)
+            from claude_oauth_model import ClaudeRouterModel  # noqa: PLC0415
+            return ClaudeRouterModel(model=bare)
         except ImportError:
             return bare
 

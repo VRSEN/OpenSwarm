@@ -1,37 +1,32 @@
-"""Custom OpenAI Agents SDK Model adapter that talks to the Anthropic
-Messages API directly using the official `anthropic` Python SDK, with a
-Claude Pro/Max/Claude Code subscription OAuth token (no API billing).
+"""OpenAI Agents SDK Model adapter that talks to Anthropic Messages API
+through a local OpenAI-compatible router (9router/CLIProxyAPI/etc.).
 
 Why this exists:
-- LiteLLM's anthropic provider sends OAuth tokens via x-api-key (wrong
-  header for OAuth) and skips the required `anthropic-beta` header, so
-  oat tokens silently fail through LiteLLM/agency-swarm's normal path.
-- We need to keep agency-swarm's agents/communication-flows/TUI intact
-  while routing every model call through Claude with subscription
-  billing. A custom Model adapter is the minimum-invasive way to do
-  that.
+- LiteLLM via agency-swarm rejects router model namespaces like
+  'cc/claude-opus-4-7' with 'Unknown prefix: cc'.
+- The router (9router) authenticates against your Claude Pro / Max /
+  Claude Code subscription itself; it expects the literal API key
+  string '9router' on the Anthropic Messages endpoint and routes by
+  the model id (cc/..., cx/..., gc/...).
+- We hand agency-swarm a Model instance bound to that router so the
+  rest of the framework treats it like any other Anthropic backend.
 
 Auth:
-- `auth_token=...`  → SDK sends `Authorization: Bearer <token>`.
-- `default_headers={"anthropic-beta": "oauth-2025-04-20"}`.
-- A `You are Claude Code, Anthropic's official CLI for Claude.` prefix
-  is prepended to the system prompt — Anthropic's subscription billing
-  path requires the request to identify as Claude Code.
+- The Anthropic Python SDK is constructed with `api_key="9router"`
+  and `base_url=<router URL>`. No OAuth token, no Bearer, no special
+  beta header — the router does subscription auth on our behalf.
+  This is the same pattern used by openswarm-ai's backend.
 
 Translation:
 - OpenAI Agents SDK input items (Responses-API-shaped) → Anthropic
   Messages API blocks (text / tool_use / tool_result).
-- OpenAI tool definitions (function with JSON-Schema parameters) →
-  Anthropic tool definitions (name, description, input_schema).
-- Anthropic content blocks (text / tool_use) → OpenAI Responses-style
-  output items so the rest of agency-swarm consumes them unchanged.
+- OpenAI tool / handoff schemas → Anthropic tool definitions.
+- Anthropic content blocks → OpenAI Responses-style output items so
+  agency-swarm consumes the response unchanged.
 
 Streaming:
-- `stream_response` is implemented in best-effort form: it calls
-  `get_response` and emits the result as a single batch of synthetic
-  Responses-API stream events. Real token-by-token streaming is a
-  future optimisation; the TUI still renders the final assistant
-  message correctly.
+- stream_response drives anthropic.messages.stream() and emits
+  per-token text-delta events plus a final completed event.
 """
 
 from __future__ import annotations
@@ -45,7 +40,7 @@ try:
     import anthropic  # type: ignore
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "ClaudeOAuthModel requires the `anthropic` package. "
+        "ClaudeRouterModel requires the `anthropic` package. "
         "Install with: pip install anthropic"
     ) from exc
 
@@ -55,42 +50,41 @@ from agents.tool import Tool
 from agents.usage import Usage
 
 
-_OAUTH_BETA_HEADER = "oauth-2025-04-20"
-_CLAUDE_CODE_PREAMBLE = "You are Claude Code, Anthropic's official CLI for Claude."
+_DEFAULT_ROUTER_URL = "http://localhost:20128"
 _DEFAULT_MAX_TOKENS = 8192
 
 
-class ClaudeOAuthModel(Model):
-    """Model adapter that calls Anthropic Messages API with an OAuth token."""
+class ClaudeRouterModel(Model):
+    """Model adapter that calls Anthropic Messages API through a local router."""
 
     def __init__(
         self,
         model: str,
-        oauth_token: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
         max_tokens: int = _DEFAULT_MAX_TOKENS,
     ) -> None:
-        token = (
-            oauth_token
-            or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
-            or os.getenv("ANTHROPIC_API_KEY")
+        # Convention used by 9router/CLIProxyAPI: literal string "9router"
+        # in the api_key slot, the router itself authenticates upstream.
+        # ANTHROPIC_BASE_URL takes precedence so the user can repoint to
+        # any other Anthropic-Messages-compatible router.
+        resolved_base = (
+            base_url
+            or os.getenv("ANTHROPIC_BASE_URL")
+            or _strip_v1(os.getenv("OPENAI_BASE_URL", ""))
+            or _DEFAULT_ROUTER_URL
         )
-        if not token:
-            raise RuntimeError(
-                "ClaudeOAuthModel needs CLAUDE_CODE_OAUTH_TOKEN (preferred) "
-                "or ANTHROPIC_API_KEY in the environment."
-            )
+        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY") or "9router"
 
-        # auth_token=  → Authorization: Bearer <token>
-        # api_key=None → suppress x-api-key header.
         self._client = anthropic.AsyncAnthropic(
-            api_key=None,
-            auth_token=token,
-            default_headers={"anthropic-beta": _OAUTH_BETA_HEADER},
+            api_key=resolved_key,
+            base_url=resolved_base,
         )
         self._model = model
         self._max_tokens = max_tokens
 
-    # ── core API ──────────────────────────────────────────────────────────
+    # Backwards-compat alias.
+    ClaudeOAuthModel = property(lambda self: self)
 
     async def get_response(
         self,
@@ -142,17 +136,9 @@ class ClaudeOAuthModel(Model):
         conversation_id: str | None = None,
         prompt: Any | None = None,
     ) -> AsyncIterator[Any]:
-        # The SDK calls `async for event in stream_response(...)` so this
-        # must return an async iterator (NOT a coroutine that resolves to
-        # one). Define an inner async generator and return it un-awaited.
         return self._stream_iter(
-            system_instructions,
-            input,
-            model_settings,
-            tools,
-            output_schema,
-            handoffs,
-            tracing,
+            system_instructions, input, model_settings, tools, output_schema,
+            handoffs, tracing,
             previous_response_id=previous_response_id,
             conversation_id=conversation_id,
             prompt=prompt,
@@ -172,9 +158,6 @@ class ClaudeOAuthModel(Model):
         conversation_id: str | None = None,
         prompt: Any | None = None,
     ) -> AsyncIterator[Any]:
-        # Best-effort streaming: drive Anthropic's native stream and emit
-        # text-delta + completed events so the TUI renders text live and
-        # the SDK can extract the final ModelResponse on completion.
         messages = _input_to_anthropic_messages(input)
         system = _build_system_prompt(system_instructions, output_schema)
         anthropic_tools = _tools_to_anthropic(tools, handoffs)
@@ -198,8 +181,6 @@ class ClaudeOAuthModel(Model):
             seq += 1
             return seq
 
-        # Lazy-import event types: model_construct() bypasses Pydantic
-        # validation so we don't have to fully populate every field.
         try:
             from openai.types.responses import (  # noqa: PLC0415
                 ResponseTextDeltaEvent,
@@ -215,27 +196,21 @@ class ClaudeOAuthModel(Model):
                 etype = getattr(event, "type", None)
                 if etype == "content_block_delta":
                     delta = getattr(event, "delta", None)
-                    delta_type = getattr(delta, "type", None)
-                    if delta_type == "text_delta" and have_event_types:
+                    if getattr(delta, "type", None) == "text_delta" and have_event_types:
                         text = getattr(delta, "text", "") or ""
                         if not text:
                             continue
                         yield ResponseTextDeltaEvent.model_construct(
                             type="response.output_text.delta",
                             delta=text,
-                            item_id=getattr(event, "index", 0) and f"item_{event.index}" or "item_0",
+                            item_id=f"item_{getattr(event, 'index', 0) or 0}",
                             output_index=int(getattr(event, "index", 0) or 0),
                             content_index=0,
                             sequence_number=_next(),
                         )
-                # We ignore content_block_start/stop, message_start/stop —
-                # the final ResponseCompletedEvent below carries everything
-                # the SDK needs to reconstruct the result.
-
             final = await stream.get_final_message()
 
         result = _anthropic_response_to_model_response(final)
-
         if have_event_types:
             yield ResponseCompletedEvent.model_construct(
                 type="response.completed",
@@ -255,12 +230,24 @@ class ClaudeOAuthModel(Model):
             )
 
 
+# Backwards-compat: keep the old import name working.
+ClaudeOAuthModel = ClaudeRouterModel
+
+
 # ── translation helpers ──────────────────────────────────────────────────
+
+def _strip_v1(url: str) -> str:
+    if url.endswith("/v1"):
+        return url[:-3]
+    if url.endswith("/v1/"):
+        return url[:-4]
+    return url
+
 
 def _build_system_prompt(
     system_instructions: str | None, output_schema: Any | None
-) -> list[dict[str, Any]] | str:
-    parts: list[str] = [_CLAUDE_CODE_PREAMBLE]
+) -> str:
+    parts: list[str] = []
     if system_instructions:
         parts.append(system_instructions)
     if output_schema is not None:
@@ -272,13 +259,12 @@ def _build_system_prompt(
             )
         except Exception:
             pass
-    return "\n\n".join(parts)
+    return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
 def _input_to_anthropic_messages(
     input_items: str | list[Any],
 ) -> list[dict[str, Any]]:
-    """Convert OpenAI Agents SDK input items to Anthropic messages."""
     if isinstance(input_items, str):
         return [{"role": "user", "content": [{"type": "text", "text": input_items}]}]
 
@@ -332,11 +318,8 @@ def _input_to_anthropic_messages(
             continue
 
         if item_type == "reasoning":
-            # Anthropic's thinking blocks aren't reusable across requests
-            # without server-side state — skip.
             continue
 
-        # Treat everything else as a message.
         role = d.get("role") or ("assistant" if item_type == "message" and d.get("status") else "user")
         text = _extract_text(d)
         if text is None:
@@ -412,9 +395,7 @@ def _tools_to_anthropic(tools: list[Tool], handoffs: list[Handoff]) -> list[dict
 
 
 def _anthropic_response_to_model_response(response: Any) -> ModelResponse:
-    """Convert an Anthropic Messages response into an OpenAI ModelResponse."""
     output_items: list[Any] = []
-
     response_id = getattr(response, "id", None) or f"resp_{uuid.uuid4().hex}"
     content_blocks = getattr(response, "content", []) or []
 
@@ -423,8 +404,7 @@ def _anthropic_response_to_model_response(response: Any) -> ModelResponse:
     for block in content_blocks:
         block_type = getattr(block, "type", None)
         if block_type == "text":
-            text = getattr(block, "text", "") or ""
-            text_chunks.append(text)
+            text_chunks.append(getattr(block, "text", "") or "")
         elif block_type == "tool_use":
             tool_calls.append({
                 "id": getattr(block, "id", "") or f"toolu_{uuid.uuid4().hex[:24]}",
@@ -467,13 +447,3 @@ def _anthropic_response_to_model_response(response: Any) -> ModelResponse:
         usage=usage,
         response_id=response_id,
     )
-
-
-def _model_response_to_stream_events(response: ModelResponse) -> list[Any]:
-    """Best-effort conversion of a final ModelResponse into stream events.
-
-    Returns an empty list — agency-swarm's streaming consumers tolerate this
-    and fall back to the final ModelResponse pulled separately. If your TUI
-    needs token-by-token rendering, this is the function to expand.
-    """
-    return []
