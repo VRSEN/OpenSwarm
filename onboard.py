@@ -58,7 +58,7 @@ PROVIDERS = [
     {
         "name":         "Anthropic",
         "env_key":      "ANTHROPIC_API_KEY",
-        "default_model": "litellm/claude-sonnet-4-6",
+        "default_model": "litellm/anthropic/claude-sonnet-4-6",
         "url":          "https://console.anthropic.com/settings/keys",
     },
     {
