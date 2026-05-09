@@ -9,13 +9,18 @@ def get_default_model(fallback: str = "gpt-5.2"):
 
 
 def is_openai_provider() -> bool:
-    """Return True when the configured provider is OpenAI (not LiteLLM).
+    """Return True only for plain OpenAI usage (no custom base, no LiteLLM).
 
-    OpenAI model IDs never contain a slash (e.g. 'gpt-5.2', 'o3') and never
-    start with a known non-OpenAI family prefix (claude*, gemini*).
-    Any 'provider/model' string (e.g. 'anthropic/claude-sonnet-4-6',
-    'litellm/gemini/gemini-3-flash') is treated as a LiteLLM-routed model.
+    Returns False when:
+      - OPENAI_BASE_URL is set (a local router/proxy is in front of us, e.g.
+        a Claude-subscription router, which won't accept OpenAI-only options
+        like reasoning summaries).
+      - DEFAULT_MODEL contains a slash (LiteLLM-routed).
+      - DEFAULT_MODEL is a bare claude-* / gemini-* name (auto-routed via
+        LiteLLM by _resolve below).
     """
+    if os.getenv("OPENAI_BASE_URL"):
+        return False
     raw = os.getenv("DEFAULT_MODEL", "")
     if "/" in raw:
         return False
@@ -39,12 +44,20 @@ def _resolve(model: str):
     """Route 'provider/model' strings through LitellmModel.
 
     Handles:
+      - OPENAI_BASE_URL set (router mode) → return string as-is so the
+        OpenAI client hits the router, regardless of model-name shape.
       - 'litellm/<provider>/<model>'  → LiteLLM with provider/model
       - 'litellm/<bare-model>'        → LiteLLM, provider inferred from name
       - '<provider>/<model>'          → LiteLLM as-is
       - bare claude-* / gemini-*      → LiteLLM with inferred provider
       - everything else (e.g. 'gpt-5.2', 'o3') → returned unchanged for OpenAI
     """
+    # Router mode: OpenAI-compatible local proxy handles all calls.
+    if os.getenv("OPENAI_BASE_URL"):
+        if model.startswith("litellm/"):
+            model = model[len("litellm/"):]
+        return model
+
     # Strip optional 'litellm/' prefix.
     if model.startswith("litellm/"):
         model = model[len("litellm/"):]

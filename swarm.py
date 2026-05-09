@@ -14,7 +14,10 @@ apply_file_attachment_reference_patch()
 apply_ipython_composio_context_patch()
 
 _tracing_key = os.getenv("OPENAI_API_KEY")
-if _tracing_key:
+# In router mode (OPENAI_BASE_URL set, e.g. claude-code-router) the
+# OPENAI_API_KEY is a dummy value the router accepts; the real OpenAI
+# tracing endpoint would reject it, so disable tracing.
+if _tracing_key and not os.getenv("OPENAI_BASE_URL"):
     set_tracing_export_api_key(_tracing_key)
 else:
     set_tracing_disabled(True)
