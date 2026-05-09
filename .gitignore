@@ -185,3 +185,7 @@ cython_debug/
 third_party/
 .claude/
 .omc/
+
+# Smoke-test scaffolding (never commit)
+.smoke_e2e.py
+.venv-smoketest/

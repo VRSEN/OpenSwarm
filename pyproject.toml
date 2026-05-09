@@ -68,6 +68,9 @@ openswarm = "run_utils:main"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"
+markers = [
+    "live: hits real provider endpoints — requires credentials in env, skipped otherwise",
+]
 
 [tool.setuptools]
 py-modules = ["agency", "swarm", "helpers", "config", "onboard", "server"]
