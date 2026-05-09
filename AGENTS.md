@@ -93,6 +93,18 @@ To build your own swarm from this repo:
 
 The coding agent will read this file, understand the structure, and make the right changes automatically.
 
+### BMAD integration note
+
+This repository also contains a BMAD installation scaffold under `_bmad/` and `_bmad-output/`. If you are customizing the swarm for software delivery, prefer extending the BMAD-specific agents and keeping planning artifacts under `_bmad-output/planning-artifacts/` and implementation artifacts under `_bmad-output/implementation-artifacts/`.
+
+The BMAD integration is not only agent-based. The authoritative customization layer now also lives in `_bmad/custom/` and includes:
+- workflow definitions
+- templates
+- artifact contracts
+- metadata schema
+
+When refining software-delivery behavior, update those assets first and then align agent instructions and routing.
+
 ---
 
 ## Current Agents
@@ -107,6 +119,11 @@ The coding agent will read this file, understand the structure, and make the rig
 | `slides_agent` | PowerPoint / HTML slide generation |
 | `image_generation_agent` | AI image generation and editing |
 | `video_generation_agent` | AI video generation and editing |
+| `bmad_business_analyst` | BMAD software discovery, briefs, and project framing |
+| `bmad_product_manager` | BMAD PRD, requirements, and validation workflows |
+| `bmad_architect` | BMAD architecture, epics/stories, and readiness workflows |
+| `bmad_developer` | BMAD development execution and review workflows |
+| `bmad_technical_writer` | BMAD technical documentation and summaries |
 
 ---
 

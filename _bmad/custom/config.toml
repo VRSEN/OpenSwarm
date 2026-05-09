@@ -1,0 +1,36 @@
+# Team / enterprise overrides for _bmad/config.toml.
+# Committed to the repo — applies to every developer on the project.
+# Tables deep-merge over base config; keyed entries merge by key.
+# Example: override an agent descriptor, or add a new agent.
+#
+# [agents.bmad-agent-pm]
+# description = "Prefers short, bulleted PRDs over narrative drafts."
+
+[team]
+name = "openswarm-bmad"
+default_workflow = "bmad-software-delivery-workflow"
+artifact_contract = "_bmad/custom/guides/artifact-contracts.md"
+
+[modules.bmm]
+workflow_definition = "_bmad/custom/workflows/bmad-software-delivery-workflow.yaml"
+product_brief_template = "_bmad/custom/templates/product-brief-template.md"
+prd_template = "_bmad/custom/templates/prd-template.md"
+architecture_template = "_bmad/custom/templates/architecture-template.md"
+story_template = "_bmad/custom/templates/story-template.md"
+readiness_report_template = "_bmad/custom/templates/readiness-report-template.md"
+artifact_metadata_schema = "_bmad/custom/schemas/artifact-metadata.schema.json"
+
+[agents.bmad-agent-analyst]
+description = "Produces BMAD analysis artifacts using rigid metadata-first templates, explicit status gates, and workflow-driven handoffs."
+
+[agents.bmad-agent-pm]
+description = "Produces BMAD PRDs and planning artifacts using strict templates, explicit readiness verdicts, and structured next-step routing."
+
+[agents.bmad-agent-architect]
+description = "Produces architecture, epics/stories, and readiness artifacts using explicit decision structure and contract-based outputs."
+
+[agents.bmad-agent-dev]
+description = "Produces story, implementation, validation, and review outputs using strict implementation artifact contracts and state transitions."
+
+[agents.bmad-agent-tech-writer]
+description = "Produces BMAD technical documentation with metadata-first templates, consistent headings, and explicit audience/purpose handoff sections."

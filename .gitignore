@@ -3,7 +3,7 @@ mnt/
 .bun-cache/
 .playwright-browsers/
 
-# TUI binaries — downloaded automatically on first run from GitHub Releases
+# TUI binaries - downloaded automatically on first run from GitHub Releases
 agency-windows-x64.exe
 agency-windows-arm64.exe
 agency-darwin-x64
@@ -185,4 +185,14 @@ cython_debug/
 third_party/
 .claude/
 mnt/
-_bmad*
+
+# BMAD generated artifacts
+_bmad-output/
+
+# Optional BMAD transient/local folders
+_bmad/tmp/
+_bmad/cache/
+
+# BMAD custom assets must be versioned
+!_bmad/custom/
+!_bmad/custom/**

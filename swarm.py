@@ -32,6 +32,11 @@ def create_agency(load_threads_callback=None):
     from docs_agent import create_docs_agent
     from video_generation_agent import create_video_generation_agent
     from image_generation_agent import create_image_generation_agent
+    from bmad_business_analyst import create_bmad_business_analyst
+    from bmad_product_manager import create_bmad_product_manager
+    from bmad_architect import create_bmad_architect
+    from bmad_developer import create_bmad_developer
+    from bmad_technical_writer import create_bmad_technical_writer
 
     orchestrator = create_orchestrator()
     virtual_assistant = create_virtual_assistant()
@@ -41,6 +46,11 @@ def create_agency(load_threads_callback=None):
     docs_agent = create_docs_agent()
     video_generation_agent = create_video_generation_agent()
     image_generation_agent = create_image_generation_agent()
+    bmad_business_analyst = create_bmad_business_analyst()
+    bmad_product_manager = create_bmad_product_manager()
+    bmad_architect = create_bmad_architect()
+    bmad_developer = create_bmad_developer()
+    bmad_technical_writer = create_bmad_technical_writer()
 
     all_agents = [
         orchestrator,
@@ -51,13 +61,25 @@ def create_agency(load_threads_callback=None):
         docs_agent,
         video_generation_agent,
         image_generation_agent,
+        bmad_business_analyst,
+        bmad_product_manager,
+        bmad_architect,
+        bmad_developer,
+        bmad_technical_writer,
     ]
 
-    send_message_flows = [
-        (orchestrator, specialist, SendMessage)
-        for specialist in all_agents
-        if specialist is not orchestrator
-    ]
+    # Avoid registering both SendMessage and Handoff on the same sender -> receiver
+    # pair. The previous setup gave the orchestrator two communication channels to
+    # every specialist, which could surface duplicated assistant text in the UI.
+    #
+    # Minimal safe fix:
+    # - orchestrator -> specialists: Handoff only
+    # - specialists -> specialists: Handoff
+    # - no SendMessage flows by default
+    #
+    # This removes the overlapping dual-channel path that was the most likely cause
+    # of duplicated responses.
+    send_message_flows = []
 
     handoff_flows = [
         (a > b, Handoff)
@@ -68,7 +90,7 @@ def create_agency(load_threads_callback=None):
 
     agency = Agency(
         *all_agents,
-        communication_flows=send_message_flows + handoff_flows,
+        communication_flows=handoff_flows,
         name="OpenSwarm",
         shared_instructions="shared_instructions.md",
         load_threads_callback=load_threads_callback,

@@ -1,0 +1,86 @@
+name: bmad-software-delivery-workflow
+description: End-to-end BMAD software delivery workflow adapted for OpenSwarm.
+version: 1
+module: bmm
+language: it
+artifacts:
+  planning_root: _bmad-output/planning-artifacts
+  implementation_root: _bmad-output/implementation-artifacts
+  project_knowledge: docs
+stages:
+  - id: analysis
+    title: Analysis
+    owner: BMAD Business Analyst
+    outputs:
+      - product-brief.md
+      - prfaq.md
+      - project-scan.md
+      - domain-research.md
+      - market-research.md
+      - technical-research.md
+    allowed_next:
+      - planning
+  - id: planning
+    title: Planning
+    owner: BMAD Product Manager
+    required_inputs:
+      - product-brief.md | prfaq.md | project-scan.md
+    outputs:
+      - prd.md
+      - prd-validation.md
+      - ux-design.md
+      - mvp-scope.md
+    allowed_next:
+      - solutioning
+      - analysis
+  - id: solutioning
+    title: Solutioning
+    owner: BMAD Architect
+    required_inputs:
+      - prd.md
+    outputs:
+      - architecture.md
+      - architecture-decisions.md
+      - epics-and-stories.md
+      - implementation-readiness.md
+      - project-context.md
+    allowed_next:
+      - implementation
+      - planning
+  - id: implementation
+    title: Implementation
+    owner: BMAD Developer
+    required_inputs:
+      - implementation-readiness.md
+      - epics-and-stories.md
+    outputs:
+      - sprint-status.md
+      - story-*.md
+      - story-validation-*.md
+      - code-review-*.md
+      - test-suite-*.md
+      - retrospective-*.md
+    allowed_next:
+      - implementation
+      - solutioning
+      - documentation
+  - id: documentation
+    title: Documentation
+    owner: BMAD Technical Writer
+    outputs:
+      - project-overview.md
+      - developer-guide.md
+      - implementation-notes.md
+      - architecture-summary.md
+validation_rules:
+  - A planning artifact must include metadata block, status block, and next-step block.
+  - A PRD cannot be marked ready unless functional and non-functional requirements are both present.
+  - Architecture cannot be marked ready unless at least one section covers components, data, integrations, and non-functional requirements.
+  - A story cannot move to development unless acceptance criteria and dependencies are explicit.
+  - Every deliverable must declare recommended_next_agent.
+routing_hints:
+  - If the user starts from an idea, route to BMAD Business Analyst.
+  - If the user asks for a PRD, route to BMAD Product Manager.
+  - If the user asks for architecture, route to BMAD Architect.
+  - If the user asks for implementation or story execution, route to BMAD Developer.
+  - If the user asks for polishing or technical documentation, route to BMAD Technical Writer.

@@ -106,6 +106,11 @@ You work as a part of the bigger agency that consist of following AI agents:
 | **Docs Agent** | Document engineer | Document creation, editing, and conversion (PDF, DOCX, Markdown, TXT) |
 | **Image Agent** | Image specialist | Image generation, editing, and composition |
 | **Video Agent** | Video specialist | Video generation, editing, and assembly |
+| **BMAD Business Analyst** | Software discovery analyst | Product briefs, PRFAQ, discovery artifacts, project framing |
+| **BMAD Product Manager** | Software product manager | PRD creation, requirement validation, MVP scope, acceptance criteria |
+| **BMAD Architect** | Solution architect | Architecture design, epics/stories planning, implementation readiness |
+| **BMAD Developer** | Software implementation specialist | Story creation, dev execution support, code review, sprint artifacts |
+| **BMAD Technical Writer** | Technical documentation specialist | Developer docs, project overviews, architecture summaries |
 
 ### 6.2 Communication topology
 

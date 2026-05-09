@@ -57,6 +57,11 @@ Connect to 10,000+ external services (Gmail, Slack, GitHub, HubSpot) via Composi
 | **Docs Agent**             | Creates formatted Word documents and PDFs from outlines or raw content.                                                                                                                      |
 | **Image Generation Agent** | Generates and edits images using Gemini 2.5 Flash Image / Gemini 3 Pro Image and fal.ai.                                                                                                     |
 | **Video Generation Agent** | Produces videos via Sora (OpenAI), Veo (Google), and Seedance (fal.ai); also edits and combines clips.                                                                                       |
+| **BMAD Business Analyst**  | Drives software discovery, product briefs, PRFAQ, and initial project framing.                                                                                                               |
+| **BMAD Product Manager**   | Turns discovery into PRDs, requirements, validation reports, and MVP scope.                                                                                                                  |
+| **BMAD Architect**         | Creates architecture, project context, epics/stories planning, and implementation readiness outputs.                                                                                         |
+| **BMAD Developer**         | Supports software implementation workflows, story creation, code review, and sprint artifacts.                                                                                                |
+| **BMAD Technical Writer**  | Produces software-facing documentation and structured technical summaries.                                                                                                                    |
 
 ---
 
@@ -94,6 +99,17 @@ They'll automatically customize all agents for your use case.
 - **Sales Swarm:** Lead research + outreach + proposal generation
 - **Marketing Swarm:** Campaign planning + creative assets + analytics
 - **Product Swarm:** Market research + feature specs + launch materials
+- **Software Delivery Swarm (BMAD):** discovery + PRD + architecture + epics/stories + implementation support
+
+BMAD integration in this repo also includes custom workflow, templates, artifact contracts, and schema files under `_bmad/custom/`, so software-delivery outputs can follow a stricter structure instead of relying on prompts alone.
+
+It also ships BMAD automation tools for template instantiation and artifact validation, allowing BMAD agents to generate structured planning/implementation artifacts directly into `_bmad-output/` and validate them against the contract automatically.
+
+Additional BMAD support now includes:
+- stronger per-template validation rules for headings, owner/stage/handoff coherence, and structured warning/error output
+- brownfield helper tooling for `document-project`, `generate-project-context`, `quick-dev`, and `correct-course`
+- a reusable QA check tool to summarize readiness gates across artifact directories
+- automated tests covering template instantiation and common validation paths
 
 ## ⚙️ API Keys & Setup
 
@@ -145,6 +161,12 @@ docker-compose up --build
 
 ```bash
 python server.py           # Runs on localhost:8080
+```
+
+**Run tests:**
+
+```bash
+pytest
 ```
 
 ---

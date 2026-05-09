@@ -56,9 +56,9 @@ def _patch_endpoint_handler_factories() -> None:
                 existing = getattr(request, "additional_instructions", None) or ""
                 request = request.model_copy(update={"additional_instructions": (existing + "\n\n" + note).strip()})
             response = await original_handler(http_request, request, token)
-            body_iterator = getattr(response, "body_iterator", None)
-            if body_iterator is not None:
-                response.body_iterator = _with_sse_heartbeats(body_iterator)
+            # Disabled custom SSE body_iterator wrapping because it can interfere
+            # with downstream event consumption and may surface duplicated text in
+            # the client UI. Keep the original response stream untouched.
             return response
 
         return handler

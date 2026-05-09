@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BMAD Artifact Metadata",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "artifact_id",
+    "status",
+    "owner_agent",
+    "stage",
+    "project",
+    "last_updated",
+    "source_inputs",
+    "recommended_next_agent"
+  ],
+  "properties": {
+    "artifact_type": { "type": "string" },
+    "artifact_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "in_review", "ready", "blocked", "superseded"]
+    },
+    "owner_agent": { "type": "string" },
+    "stage": {
+      "type": "string",
+      "enum": ["analysis", "planning", "solutioning", "implementation", "documentation"]
+    },
+    "project": { "type": "string" },
+    "last_updated": {
+      "type": "string",
+      "description": "Expected format: YYYY-MM-DD"
+    },
+    "source_inputs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommended_next_agent": { "type": "string" },
+    "recommended_next_workflow": { "type": ["string", "null"] },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocking_issues": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}
