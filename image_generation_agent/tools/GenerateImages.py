@@ -140,15 +140,6 @@ class GenerateImages(BaseTool):
         size = get_openai_size_for_aspect_ratio(self.aspect_ratio)
 
         client = get_openai_client(tool=self)
-        if not str(client.base_url).startswith("https://api.openai.com"):
-            raise ValueError(
-                image_model_availability_message(
-                    self,
-                    failed_requirement=(
-                        "The current auth is Codex/browser auth. gpt-image-1.5 is not supported through the Codex API."
-                    ),
-                )
-            )
         response = client.images.generate(
             model=self.model,
             prompt=self.prompt,

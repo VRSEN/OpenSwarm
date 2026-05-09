@@ -1,9 +1,5 @@
 from agency_swarm import Agent, ModelSettings
-from agency_swarm.tools import (
-    WebSearchTool,
-    PersistentShellTool,
-    IPythonInterpreter,
-)
+from agency_swarm.tools import PersistentShellTool
 from openai.types.shared import Reasoning
 from dotenv import load_dotenv
 
@@ -12,8 +8,14 @@ from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, Se
 
 load_dotenv()
 
-# Class-level rename — idempotent, safe to run once at import time.
-IPythonInterpreter.__name__ = "ProgrammaticToolCalling"
+
+def _hosted_tools():
+    """Return hosted OpenAI tools only when using the Responses API."""
+    if not is_openai_provider():
+        return []
+    from agency_swarm.tools import WebSearchTool, IPythonInterpreter
+    IPythonInterpreter.__name__ = "ProgrammaticToolCalling"
+    return [WebSearchTool(), IPythonInterpreter]
 
 
 def create_virtual_assistant() -> Agent:
@@ -29,9 +31,8 @@ def create_virtual_assistant() -> Agent:
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
         tools=[
-            WebSearchTool(),
+            *_hosted_tools(),
             PersistentShellTool,
-            IPythonInterpreter,
             CopyFile,
             ExecuteTool,
             FindTools,

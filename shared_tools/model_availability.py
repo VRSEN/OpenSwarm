@@ -29,7 +29,7 @@ def direct_openai_available(tool=None) -> bool:
     _refresh_runtime_env()
     creds = get_caller_openai_credentials(tool) if tool is not None else None
     if creds:
-        return creds[1].startswith("https://api.openai.com")
+        return bool(creds[0])  # Any API key means available (supports OpenRouter)
     return bool(os.getenv("OPENAI_API_KEY"))
 
 

@@ -155,15 +155,6 @@ class EditImages(BaseTool):
 
         try:
             client = get_openai_client(tool=self)
-            if not str(client.base_url).startswith("https://api.openai.com"):
-                raise ValueError(
-                    image_model_availability_message(
-                        self,
-                        failed_requirement=(
-                            "The current auth is Codex/browser auth. gpt-image-1.5 editing is not supported through the Codex API."
-                        ),
-                    )
-                )
             response = client.images.edit(
                 model=self.model,
                 image=buffer,

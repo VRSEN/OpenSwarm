@@ -29,6 +29,10 @@ def _resolve(model: str):
     bare = model[len("litellm/"):] if model.startswith("litellm/") else model
     try:
         from agency_swarm import LitellmModel  # noqa: PLC0415
-        return LitellmModel(model=bare)
+        return LitellmModel(
+            model=bare,
+            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"),
+        )
     except ImportError:
         return model

@@ -26,4 +26,7 @@ def get_openai_client(tool=None) -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is required")
+    base_url = os.getenv("OPENAI_BASE_URL")
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url)
     return OpenAI(api_key=api_key)

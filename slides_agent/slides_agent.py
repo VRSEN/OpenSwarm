@@ -1,5 +1,5 @@
 from agency_swarm import Agent, ModelSettings
-from agency_swarm.tools import IPythonInterpreter, PersistentShellTool, LoadFileAttachment, WebSearchTool
+from agency_swarm.tools import PersistentShellTool, LoadFileAttachment
 from datetime import datetime, timezone
 from openai.types.shared import Reasoning
 from pathlib import Path
@@ -28,6 +28,14 @@ from .tools import (
 )
 
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
+
+
+def _hosted_tools():
+    """Return hosted OpenAI tools only when using the Responses API."""
+    if not is_openai_provider():
+        return []
+    from agency_swarm.tools import WebSearchTool, IPythonInterpreter
+    return [IPythonInterpreter, WebSearchTool(search_context_size="high")]
 
 
 def _list_existing_projects() -> str:
@@ -81,12 +89,11 @@ def create_slides_agent() -> Agent:
             # ApplyPptxTextReplacements,
             ImageSearch,
             # Utility tools
-            IPythonInterpreter,
+            *_hosted_tools(),
             PersistentShellTool,
             LoadFileAttachment,
             CopyFile,
             ReadFile,
-            WebSearchTool(search_context_size="high"),
         ],
         model=get_default_model(),
         model_settings=ModelSettings(

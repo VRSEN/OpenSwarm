@@ -186,12 +186,13 @@ class GenerateVideo(BaseTool):
         client = get_openai_client(tool=self)
         if not str(client.base_url).startswith("https://api.openai.com"):
             raise ValueError(
-                video_model_availability_message(
-                    self,
-                    failed_requirement=(
-                        "The current auth is Codex/browser auth. Sora video generation is not supported through the Codex API."
-                    ),
-                )
+                "Sora video generation requires a direct OpenAI API key (api.openai.com).\n"
+                "Current endpoint: " + str(client.base_url) + "\n\n"
+                "Alternative video models available with your setup:\n"
+                "- Veo (Google Gemini): requires GOOGLE_API_KEY\n"
+                "- Seedance (fal.ai): requires FAL_KEY\n\n"
+                "Set the appropriate key in .env and use model='veo-3.1-generate-preview' "
+                "or model='seedance-1.5-pro'"
             )
         reference_file = None
         

@@ -2,13 +2,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agency_swarm import Agent, ModelSettings, Agency
-from agency_swarm.tools import IPythonInterpreter, WebSearchTool
 from openai.types.shared import Reasoning
 from shared_tools import CopyFile
 
 from config import get_default_model, is_openai_provider
 
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
+
+
+def _hosted_tools():
+    """Return hosted OpenAI tools only when using the Responses API."""
+    if not is_openai_provider():
+        return []
+    from agency_swarm.tools import WebSearchTool, IPythonInterpreter
+    return [WebSearchTool(), IPythonInterpreter]
 
 
 def _list_existing_projects() -> str:
@@ -43,7 +50,7 @@ def create_docs_agent() -> Agent:
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
-        tools=[WebSearchTool(), IPythonInterpreter, CopyFile],
+        tools=[*_hosted_tools(), CopyFile],
         conversation_starters=[
             "Draft Week 34 client status report with a table and export as PDF.",
             "Create a one-page AI chatbot proposal and export as DOCX.",

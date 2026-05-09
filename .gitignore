@@ -184,3 +184,5 @@ cython_debug/
 .agency_swarm/
 third_party/
 .claude/
+mnt/
+_bmad*
