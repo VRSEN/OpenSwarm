@@ -13,6 +13,32 @@ def is_router_mode() -> bool:
     return bool(os.getenv("OPENAI_BASE_URL"))
 
 
+def is_oauth_mode() -> bool:
+    """True when we are calling Anthropic directly with a Claude Code
+    subscription OAuth token via ClaudeOAuthModel."""
+    if os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
+        return True
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    return key.startswith("sk-ant-oat")
+
+
+def is_openai_provider() -> bool:
+    """Return True only for plain OpenAI usage (no custom base, no LiteLLM,
+    no OAuth path).
+    """
+    if os.getenv("OPENAI_BASE_URL"):
+        return False
+    if is_oauth_mode():
+        return False
+    raw = os.getenv("DEFAULT_MODEL", "")
+    if "/" in raw:
+        return False
+    lowered = raw.lower()
+    if lowered.startswith(("claude", "gemini")):
+        return False
+    return True
+
+
 def filter_hosted_tools(tools: list) -> list:
     """Drop OpenAI-hosted tools (WebSearchTool, FileSearchTool, etc.) when
     the model is reached via Chat Completions — hosted tools only run on
@@ -21,7 +47,7 @@ def filter_hosted_tools(tools: list) -> list:
     In router mode we use Chat Completions, so a hosted tool would raise
     'Hosted tools are not supported with the ChatCompletions API'.
     """
-    if not is_router_mode():
+    if not (is_router_mode() or is_oauth_mode()):
         return tools
     try:
         from agents.tool import (  # noqa: PLC0415
@@ -45,28 +71,6 @@ def filter_hosted_tools(tools: list) -> list:
     return [t for t in tools if not isinstance(t, hosted_types)]
 
 
-def is_openai_provider() -> bool:
-    """Return True only for plain OpenAI usage (no custom base, no LiteLLM).
-
-    Returns False when:
-      - OPENAI_BASE_URL is set (a local router/proxy is in front of us, e.g.
-        a Claude-subscription router, which won't accept OpenAI-only options
-        like reasoning summaries).
-      - DEFAULT_MODEL contains a slash (LiteLLM-routed).
-      - DEFAULT_MODEL is a bare claude-* / gemini-* name (auto-routed via
-        LiteLLM by _resolve below).
-    """
-    if os.getenv("OPENAI_BASE_URL"):
-        return False
-    raw = os.getenv("DEFAULT_MODEL", "")
-    if "/" in raw:
-        return False
-    lowered = raw.lower()
-    if lowered.startswith(("claude", "gemini")):
-        return False
-    return True
-
-
 def _infer_provider_prefix(model: str) -> str:
     """Map a bare model name to the LiteLLM provider it belongs to."""
     lowered = model.lower()
@@ -78,19 +82,31 @@ def _infer_provider_prefix(model: str) -> str:
 
 
 def _resolve(model: str):
-    """Route 'provider/model' strings through LitellmModel.
+    """Route 'provider/model' strings through the right backend.
 
-    Handles:
-      - OPENAI_BASE_URL set (router mode) → wrap the model name in an
-        OpenAIResponsesModel bound to the router-aware AsyncOpenAI client,
-        so agency-swarm does not try to parse 'cc/...' or other router
-        namespaces as a provider prefix.
-      - 'litellm/<provider>/<model>'  → LiteLLM with provider/model
-      - 'litellm/<bare-model>'        → LiteLLM, provider inferred from name
-      - '<provider>/<model>'          → LiteLLM as-is
-      - bare claude-* / gemini-*      → LiteLLM with inferred provider
-      - everything else (e.g. 'gpt-5.2', 'o3') → returned unchanged for OpenAI
+    Precedence:
+      1. CLAUDE_CODE_OAUTH_TOKEN (or sk-ant-oat... in ANTHROPIC_API_KEY)
+         → ClaudeOAuthModel: direct Anthropic Messages API + Bearer +
+         oauth-2025-04-20 beta header. Subscription billing.
+      2. OPENAI_BASE_URL set → wrap in OpenAIChatCompletionsModel bound
+         to a router-aware AsyncOpenAI client.
+      3. 'litellm/...' or '<provider>/<model>' / bare claude-* / gemini-*
+         → LiteLLM via LitellmModel.
+      4. Everything else (gpt-5.2, o3, ...) → returned unchanged for OpenAI.
     """
+    # OAuth mode: direct Anthropic with subscription token.
+    if is_oauth_mode():
+        # Strip any router/litellm prefix the user might have copied in.
+        bare = model
+        for prefix in ("litellm/", "anthropic/", "cc/", "cx/"):
+            if bare.startswith(prefix):
+                bare = bare[len(prefix):]
+        try:
+            from claude_oauth_model import ClaudeOAuthModel  # noqa: PLC0415
+            return ClaudeOAuthModel(model=bare)
+        except ImportError:
+            return bare
+
     # Router mode: OpenAI-compatible local proxy handles all calls.
     # Use Chat Completions (not Responses) — its response shape is universally
     # implemented by routers/proxies, while Responses-API output-items often

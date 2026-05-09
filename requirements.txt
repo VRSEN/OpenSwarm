@@ -1,4 +1,5 @@
 agency-swarm[fastapi,jupyter,litellm]>=1.9.7
+anthropic>=0.40.0
 questionary>=2.0.0
 fastapi
 uvicorn
