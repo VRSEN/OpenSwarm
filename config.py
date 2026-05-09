@@ -55,14 +55,17 @@ def _resolve(model: str):
       - everything else (e.g. 'gpt-5.2', 'o3') → returned unchanged for OpenAI
     """
     # Router mode: OpenAI-compatible local proxy handles all calls.
+    # Use Chat Completions (not Responses) — its response shape is universally
+    # implemented by routers/proxies, while Responses-API output-items often
+    # come back as None and trip SDK validation.
     if os.getenv("OPENAI_BASE_URL"):
         if model.startswith("litellm/"):
             model = model[len("litellm/"):]
         try:
-            from agents import OpenAIResponsesModel  # noqa: PLC0415
+            from agents import OpenAIChatCompletionsModel  # noqa: PLC0415
             from openai import AsyncOpenAI  # noqa: PLC0415
             client = AsyncOpenAI()  # reads OPENAI_BASE_URL + OPENAI_API_KEY
-            return OpenAIResponsesModel(model=model, openai_client=client)
+            return OpenAIChatCompletionsModel(model=model, openai_client=client)
         except ImportError:
             return model
 

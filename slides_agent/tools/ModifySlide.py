@@ -308,11 +308,10 @@ def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     is_codex = False
     if router_mode:
-        from agents import OpenAIResponsesModel
-        from openai import AsyncOpenAI
         from config import get_default_model
-        client = AsyncOpenAI()
-        model = OpenAIResponsesModel(model=str(get_default_model()), openai_client=client)
+        # get_default_model already returns a router-bound
+        # OpenAIChatCompletionsModel instance in router mode.
+        model = get_default_model()
     elif anthropic_key:
         model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
