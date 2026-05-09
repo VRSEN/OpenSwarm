@@ -44,8 +44,10 @@ def _resolve(model: str):
     """Route 'provider/model' strings through LitellmModel.
 
     Handles:
-      - OPENAI_BASE_URL set (router mode) → return string as-is so the
-        OpenAI client hits the router, regardless of model-name shape.
+      - OPENAI_BASE_URL set (router mode) → wrap the model name in an
+        OpenAIResponsesModel bound to the router-aware AsyncOpenAI client,
+        so agency-swarm does not try to parse 'cc/...' or other router
+        namespaces as a provider prefix.
       - 'litellm/<provider>/<model>'  → LiteLLM with provider/model
       - 'litellm/<bare-model>'        → LiteLLM, provider inferred from name
       - '<provider>/<model>'          → LiteLLM as-is
@@ -56,7 +58,13 @@ def _resolve(model: str):
     if os.getenv("OPENAI_BASE_URL"):
         if model.startswith("litellm/"):
             model = model[len("litellm/"):]
-        return model
+        try:
+            from agents import OpenAIResponsesModel  # noqa: PLC0415
+            from openai import AsyncOpenAI  # noqa: PLC0415
+            client = AsyncOpenAI()  # reads OPENAI_BASE_URL + OPENAI_API_KEY
+            return OpenAIResponsesModel(model=model, openai_client=client)
+        except ImportError:
+            return model
 
     # Strip optional 'litellm/' prefix.
     if model.startswith("litellm/"):
