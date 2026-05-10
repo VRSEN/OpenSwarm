@@ -71,9 +71,11 @@ from agents.usage import Usage
 class ClaudeAgentSDKModel(Model):
     """Model adapter backed by `claude_agent_sdk` + local `claude` CLI."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, use_builtin_tools: bool | None = None) -> None:
         self._model = model
-        self._use_builtin_tools = os.getenv("CLAUDE_USE_BUILTIN_TOOLS", "").lower() in ("1", "true", "yes")
+        if use_builtin_tools is None:
+            use_builtin_tools = os.getenv("CLAUDE_USE_BUILTIN_TOOLS", "").lower() in ("1", "true", "yes")
+        self._use_builtin_tools = bool(use_builtin_tools)
 
     async def get_response(
         self,
