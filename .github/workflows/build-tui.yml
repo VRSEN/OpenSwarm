@@ -141,7 +141,18 @@ jobs:
         working-directory: agentswarm-cli/packages/opencode
         env:
           OPENCODE_CHANNEL: latest
-          OPENCODE_VERSION: ${{ env.AGENTSWARM_CLI_VERSION }}
+          AGENTSWARM_PRODUCT_DISPLAY_NAME: OpenSwarm
+          AGENTSWARM_PRODUCT_COMMAND: openswarm
+          AGENTSWARM_PRODUCT_PACKAGE_NAME: "@vrsen/openswarm"
+          AGENTSWARM_PRODUCT_LAUNCHER_PACKAGE_NAME: "@vrsen/openswarm"
+          AGENTSWARM_PRODUCT_RELEASE_REPO: VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_DOCS_URL: https://github.com/VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_ISSUE_URL: https://github.com/VRSEN/OpenSwarm/issues/new?template=bug-report.yml
+          AGENTSWARM_PRODUCT_MDNS_DOMAIN: openswarm.local
+          AGENTSWARM_PRODUCT_STARTER_REPO: VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_STARTER_FOLDER: openswarm
+          AGENTSWARM_PRODUCT_ENTRY_FILES: swarm.py,agency.py
+          AGENTSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
         run: bun run script/build.ts --single --skip-install
 
       - name: Rename binary (Unix)
