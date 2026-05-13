@@ -89,6 +89,8 @@ Only allowlisted scalar properties are sent:
 - Setup/auth: `auth_method`, `provider`, `has_provider_key`, `install_source`
 - Errors: `error_type`, `error_category`, `status`, `http_status`
 
+`model` and `provider` are additionally validated as short identifier-like values. Values that look like file paths, URLs, email addresses, API keys, tokens, or secrets are dropped. Numeric fields such as token counts, latency, HTTP status, and cost must be real numbers, and boolean fields must be real booleans.
+
 ## Privacy Policy
 
 Telemetry must not include message contents, prompts, tool arguments, tool results, generated content, exception messages, stack traces, tracebacks, file paths, API keys, emails, Composio IDs, raw workspace paths, raw user IDs, or `telemetry_opted_out`.

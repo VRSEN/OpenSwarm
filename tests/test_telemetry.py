@@ -172,6 +172,122 @@ def test_agent_name_is_raw_on_relevant_events(telemetry_events: list[dict], monk
         assert props["agent_id"] != "Docs Agent"
 
 
+def test_safe_model_and_provider_are_sent(monkeypatch: pytest.MonkeyPatch, telemetry_events: list[dict]) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    model = "litellm/anthropic/claude-sonnet-4-6"
+
+    telemetry.capture(
+        "agent_run_started",
+        {
+            "agent_name": "Research",
+            "model": model,
+            "provider": telemetry.provider_from_model(model),
+        },
+    )
+
+    props = telemetry_events[0]["properties"]
+    assert props["model"] == model
+    assert props["provider"] == "anthropic"
+
+
+def test_unsafe_model_values_are_dropped(monkeypatch: pytest.MonkeyPatch, telemetry_events: list[dict]) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    cases = [
+        ("/Users/mike/private-model", None),
+        ("model user@example.com", None),
+        ("C:\\Users\\mike\\private-model", None),
+        ("https://example.com/private-model", None),
+        ("litellm/openai/sk-secret1234567890", "openai"),
+        ("gpt-5.2 api_key=secret", None),
+    ]
+
+    for model, expected_provider in cases:
+        telemetry.capture(
+            "agent_run_started",
+            {
+                "agent_name": "Research",
+                "model": model,
+                "provider": telemetry.provider_from_model(model),
+            },
+        )
+        props = telemetry_events[-1]["properties"]
+        assert "model" not in props
+        if expected_provider:
+            assert props["provider"] == expected_provider
+        else:
+            assert "provider" not in props
+        assert "@" not in str(props)
+        assert "/Users" not in str(props)
+        assert "sk-secret" not in str(props)
+        assert "api_key" not in str(props)
+
+
+def test_configured_provider_ignores_unsafe_default_model(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("DEFAULT_MODEL", "gpt-5.2 api_key=secret")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    assert telemetry.configured_provider() is None
+
+
+def test_numeric_and_boolean_properties_are_type_gated(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+
+    telemetry.capture(
+        "error",
+        {
+            "error_type": "ValueError",
+            "error_category": "test",
+            "http_status": "429",
+            "latency_ms": "/Users/mike/private",
+            "tokens_input": "10",
+            "tokens_output": "20",
+            "cost_usd": "1.25",
+            "is_streaming": "true",
+            "has_provider_key": "true",
+        },
+    )
+    unsafe_props = telemetry_events[0]["properties"]
+    for key in (
+        "http_status",
+        "latency_ms",
+        "tokens_input",
+        "tokens_output",
+        "cost_usd",
+        "is_streaming",
+        "has_provider_key",
+    ):
+        assert key not in unsafe_props
+
+    telemetry.capture(
+        "error",
+        {
+            "error_type": "ValueError",
+            "error_category": "test",
+            "http_status": 429,
+            "latency_ms": 12,
+            "tokens_input": 10,
+            "tokens_output": 20,
+            "cost_usd": 1.25,
+            "is_streaming": False,
+            "has_provider_key": True,
+        },
+    )
+    safe_props = telemetry_events[1]["properties"]
+    assert safe_props["http_status"] == 429
+    assert safe_props["latency_ms"] == 12
+    assert safe_props["tokens_input"] == 10
+    assert safe_props["tokens_output"] == 20
+    assert safe_props["cost_usd"] == 1.25
+    assert safe_props["is_streaming"] is False
+    assert safe_props["has_provider_key"] is True
+
+
 def test_workspace_id_is_hmac_not_plain_path_hash(telemetry_events: list[dict], tmp_path) -> None:
     workspace = tmp_path / "secret-project"
     workspace.mkdir()

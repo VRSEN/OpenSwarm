@@ -7,6 +7,7 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -71,6 +72,20 @@ ALLOWED_EVENTS = {
     "telemetry_smoke_test",
     "tool_invoked",
 }
+
+BASE_PROPERTIES = {"event_version", "session_id", "user_id", "workspace_id"}
+BOOLEAN_PROPERTIES = {"has_provider_key", "is_streaming"}
+INTEGER_PROPERTIES = {"http_status", "latency_ms", "tokens_input", "tokens_output"}
+FLOAT_PROPERTIES = {"cost_usd"}
+MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$")
+SAFE_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+EMAIL_RE = re.compile(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}")
+SECRET_RE = re.compile(
+    r"(?i)(api[_-]?key|secret|token|password|bearer|sk-[A-Za-z0-9_-]{8,}|"
+    r"sk-proj-[A-Za-z0-9_-]{8,}|phc_[A-Za-z0-9_-]{8,}|phx_[A-Za-z0-9_-]{8,}|"
+    r"AIza[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_-]{8,})"
+)
+PATH_RE = re.compile(r"(?i)(^/|^\./|^\.\./|^~/|^[A-Za-z]:[\\/]|[\\]|/(Users|home|private|var|tmp)/|//)")
 
 CONTENT_LIKE_KEYS = {
     "arguments",
@@ -307,19 +322,25 @@ def provider_from_model(model: Any) -> str | None:
         return None
     name = str(model)
     if "/" not in name:
-        if name.startswith(("gpt-", "o")):
+        safe_model = sanitize_model_id(name)
+        if safe_model and safe_model.startswith(("gpt-", "o")):
             return "openai"
         return None
     parts = name.split("/")
+    provider: str | None
     if parts[0] == "litellm" and len(parts) > 1:
-        return parts[1]
-    return parts[0]
+        provider = parts[1]
+    else:
+        provider = parts[0]
+    return sanitize_provider(provider)
 
 
 def configured_provider() -> str | None:
     model = os.getenv("DEFAULT_MODEL", "")
     if model:
-        return provider_from_model(model) or ("openai" if "/" not in model else None)
+        provider = provider_from_model(model)
+        if provider:
+            return provider
     if os.getenv("OPENAI_API_KEY"):
         return "openai"
     if os.getenv("ANTHROPIC_API_KEY"):
@@ -333,16 +354,54 @@ def has_provider_key() -> bool:
     return bool(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY"))
 
 
-def _safe_scalar(value: Any) -> str | int | float | bool | None:
-    if value is None or isinstance(value, bool):
-        return value
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, float):
-        return value
+def _looks_private(value: str) -> bool:
+    return bool(EMAIL_RE.search(value) or SECRET_RE.search(value) or PATH_RE.search(value))
+
+
+def sanitize_model_id(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    model = value.strip()
+    if not model or len(model) > 128:
+        return None
+    if not MODEL_ID_RE.fullmatch(model):
+        return None
+    if _looks_private(model):
+        return None
+    return model
+
+
+def sanitize_provider(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    provider = value.strip()
+    if not provider or not SAFE_SLUG_RE.fullmatch(provider):
+        return None
+    if _looks_private(provider):
+        return None
+    return provider
+
+
+def _safe_property(key: str, value: Any) -> str | int | float | bool | None:
+    if key in BASE_PROPERTIES:
+        return None
+    if key == "model":
+        return sanitize_model_id(value)
+    if key == "provider":
+        return sanitize_provider(value)
+    if key in BOOLEAN_PROPERTIES:
+        return value if isinstance(value, bool) else None
+    if key in INTEGER_PROPERTIES:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+    if key in FLOAT_PROPERTIES:
+        return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+    if value is None:
+        return None
     if isinstance(value, str):
         return value[:256]
-    return str(type(value).__name__)[:128]
+    if isinstance(value, bool | int | float):
+        return value
+    return None
 
 
 def sanitize_properties(properties: dict[str, Any] | None) -> dict[str, Any]:
@@ -359,7 +418,7 @@ def sanitize_properties(properties: dict[str, Any] | None) -> dict[str, Any]:
             continue
         if key in CONTENT_LIKE_KEYS:
             continue
-        scalar = _safe_scalar(value)
+        scalar = _safe_property(key, value)
         if scalar is not None:
             safe[key] = scalar
     return safe

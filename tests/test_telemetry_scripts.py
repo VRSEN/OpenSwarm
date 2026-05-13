@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -101,3 +103,41 @@ def test_python_wheel_excludes_stale_generated_config(tmp_path) -> None:
     finally:
         root_generated_config.unlink(missing_ok=True)
         stale_build_config.unlink(missing_ok=True)
+
+
+def test_npm_pack_includes_generated_config_after_writer() -> None:
+    if not shutil.which("npm"):
+        pytest.skip("npm is not installed")
+
+    repo = Path(__file__).resolve().parents[1]
+    root_generated_config = repo / "openswarm_telemetry_config.py"
+
+    try:
+        writer = subprocess.run(
+            [sys.executable, "scripts/write_telemetry_config.py"],
+            cwd=repo,
+            env={
+                **os.environ,
+                "POSTHOG_API_KEY": "ph_pack_test",
+                "POSTHOG_HOST": "https://example.i.posthog.com",
+            },
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert writer.returncode == 0, writer.stderr
+
+        packed = subprocess.run(
+            ["npm", "pack", "--dry-run", "--json"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert packed.returncode == 0, packed.stderr
+        package = json.loads(packed.stdout)[0]
+        paths = {entry["path"] for entry in package["files"]}
+
+        assert "openswarm_telemetry_config.py" in paths
+    finally:
+        root_generated_config.unlink(missing_ok=True)
