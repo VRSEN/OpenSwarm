@@ -113,7 +113,7 @@ Optional:
 POSTHOG_APP_HOST=https://us.posthog.com
 ```
 
-The dashboard is named `OpenSwarm Product Analytics`. It creates tagged `OpenSwarm / ...` insights for compact 24-hour KPI cards, product activity by day, messages by role, agent usage grouped by raw `agent_name`, tool usage, error category/type breakdowns, error rate, and a recent safe telemetry sample table. The dashboard script also applies a compact layout so the KPI cards appear in one row. The recent samples table includes PostHog's dashboard `{filters}` placeholder, so dashboard-level filters can narrow it by date, event, agent, tool, role, error type, or status.
+The dashboard is named `OpenSwarm Product Analytics`. It creates tagged `OpenSwarm / ...` insights for compact 24-hour KPI cards, product activity by day, messages by role, agent usage grouped by raw `agent_name`, tool usage, error category/type breakdowns, error rate, and a recent safe telemetry sample table. The dashboard script also applies a compact layout so the KPI cards appear in one row. HogQL dashboard tiles include PostHog's dashboard `{filters}` placeholder, so dashboard-level filters can narrow them by date, event, agent, tool, role, error type, or status.
 
 To inspect the exact API payloads without creating anything:
 

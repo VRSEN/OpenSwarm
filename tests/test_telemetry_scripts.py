@@ -116,6 +116,7 @@ def test_dashboard_error_rate_uses_hogql_rate_query() -> None:
     assert error_rate["query"]["kind"] == "DataVisualizationNode"
     source = error_rate["query"]["source"]
     assert source["kind"] == "HogQLQuery"
+    assert "WHERE {filters}" in source["query"]
     assert "countIf(event = 'error')" in source["query"]
     assert "countIf(event = 'swarm_run_completed')" in source["query"]
     assert error_rate["dashboards"] == [123]
