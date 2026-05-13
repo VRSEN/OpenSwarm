@@ -67,6 +67,12 @@ PROVIDERS = [
         "default_model": "litellm/gemini/gemini-3-flash",
         "url":          "https://aistudio.google.com/app/apikey",
     },
+    {
+        "name":         "MiniMax",
+        "env_key":      "MINIMAX_API_KEY",
+        "default_model": "minimax/MiniMax-M2.7",
+        "url":          "https://platform.minimaxi.com",
+    },
 ]
 
 # ── add-on definitions ────────────────────────────────────────────────────────
