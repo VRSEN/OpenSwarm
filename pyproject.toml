@@ -56,8 +56,21 @@ dependencies = [
     "httpx",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
 [project.scripts]
 openswarm = "run_utils:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+markers = [
+    "live: hits real provider endpoints — requires credentials in env, skipped otherwise",
+]
 
 [tool.setuptools]
 py-modules = ["agency", "swarm", "helpers", "config", "onboard", "server"]

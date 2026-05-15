@@ -116,7 +116,10 @@ The coding agent will read this file, understand the structure, and make the rig
 - `instructions.md` is the agent's system prompt — edit it to change behavior
 - Tools live in `tools/` and are auto-loaded by the agent definition
 - `shared_tools/` contains Composio-powered integrations (Gmail, Slack, GitHub, etc.) available to all agents
+- `orchestrator/tools/` holds tools that **only** the orchestrator gets — currently just `SwitchProvider`. Specialist agents must never import from this directory; the orchestrator's "router only" contract has one documented carve-out (provider switching) and that's it.
 - Models are configured via `DEFAULT_MODEL` in `.env` — never hardcoded
+- Provider routing: every supported provider is registered in `config.PROVIDER_REGISTRY` (a single source of truth). Adding a new provider means one entry there plus an optional UI entry in `onboard.PROVIDERS`.
+- Runtime provider switch: orchestrator users say "switch to <slug> <model>"; the `SwitchProvider` tool writes `.env` and signals `run_utils.main()` to rebuild the agency on next TUI exit. The FastAPI server at `server.py` does **not** read this signal — switching there is a no-op.
 
 Before proceeding with agent creation, please read the following instructions carefully:
 

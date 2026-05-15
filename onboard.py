@@ -48,24 +48,105 @@ if _HAS_QUESTIONARY:
     ])
 
 # ── provider definitions ──────────────────────────────────────────────────────
+# Each provider declares one or more env keys (`keys`) and a `default_model`
+# template. When the template contains `{model}`, the wizard asks the user for
+# the model/deployment name; otherwise the template is used as-is. Each key
+# spec supports: env, label, url (link to dashboard), help (one-line hint),
+# secret (default True), default (pre-fill).
 PROVIDERS = [
     {
-        "name":         "OpenAI",
-        "env_key":      "OPENAI_API_KEY",
+        "name":          "OpenAI",
         "default_model": "gpt-5.2",
-        "url":          "https://platform.openai.com/api-keys",
+        "keys": [
+            {"env": "OPENAI_API_KEY", "label": "OpenAI API key",
+             "url": "https://platform.openai.com/api-keys"},
+        ],
     },
     {
-        "name":         "Anthropic",
-        "env_key":      "ANTHROPIC_API_KEY",
+        "name":          "Anthropic",
         "default_model": "litellm/claude-sonnet-4-6",
-        "url":          "https://console.anthropic.com/settings/keys",
+        "keys": [
+            {"env": "ANTHROPIC_API_KEY", "label": "Anthropic API key",
+             "url": "https://console.anthropic.com/settings/keys"},
+        ],
     },
     {
-        "name":         "Google Gemini",
-        "env_key":      "GOOGLE_API_KEY",
+        "name":          "Google Gemini",
         "default_model": "litellm/gemini/gemini-3-flash",
-        "url":          "https://aistudio.google.com/app/apikey",
+        "keys": [
+            {"env": "GOOGLE_API_KEY", "label": "Google AI API key",
+             "url": "https://aistudio.google.com/app/apikey"},
+        ],
+    },
+    {
+        "name":          "Azure OpenAI Service",
+        "default_model": "azure/{model}",
+        "model_label":   "Azure deployment name",
+        "model_help":    "Name of your deployment in Azure (e.g. 'gpt-5.2-prod').",
+        "keys": [
+            {"env": "AZURE_API_KEY", "label": "Azure API key",
+             "url": "https://portal.azure.com"},
+            {"env": "AZURE_API_BASE", "label": "Azure endpoint URL",
+             "help": "https://<resource>.openai.azure.com", "secret": False},
+            {"env": "AZURE_API_VERSION", "label": "API version",
+             "default": "2024-08-01-preview", "secret": False},
+        ],
+    },
+    {
+        "name":          "Azure AI Foundry",
+        "default_model": "azure_ai/{model}",
+        "model_label":   "Foundry catalog model",
+        "model_help":    (
+            "Catalog name. Examples: 'claude-opus-4-1' or 'claude-sonnet-4-5' "
+            "(Anthropic), 'Llama-3.3-70B-Instruct', 'Mistral-large-2407', "
+            "'DeepSeek-V3'."
+        ),
+        "keys": [
+            {"env": "AZURE_AI_API_KEY", "label": "Azure AI Foundry key",
+             "url": "https://ai.azure.com"},
+            {"env": "AZURE_AI_API_BASE", "label": "Foundry endpoint URL",
+             "help": (
+                 "https://<resource>.services.ai.azure.com — append '/anthropic' "
+                 "for Claude models (e.g. https://my-resource.services.ai.azure.com/anthropic)."
+             ),
+             "secret": False},
+        ],
+    },
+    {
+        "name":          "Ollama (local)",
+        "default_model": "ollama_chat/{model}",
+        "model_label":   "Ollama model",
+        "model_help":    "A model you've already pulled (e.g. 'llama3.1', 'qwen2.5').",
+        "keys": [
+            {"env": "OLLAMA_API_BASE", "label": "Ollama server URL",
+             "default": "http://localhost:11434", "secret": False},
+        ],
+    },
+    {
+        "name":          "OpenAI-compatible (Ollama Cloud, Groq, Together, ...)",
+        "default_model": "openai_compat/{model}",
+        "model_label":   "Model name (as the vendor advertises it)",
+        "model_help":    (
+            "Pass the exact model id from the vendor — e.g. 'qwen3-coder:480b-cloud' "
+            "(Ollama Cloud), 'llama-3.3-70b-versatile' (Groq), "
+            "'mistral-large-latest' (Mistral La Plateforme)."
+        ),
+        "keys": [
+            # Vendor-dependent; deliberately no `url` here so the wizard
+            # doesn't render a misleading single hyperlink. The help_hint
+            # on the next key lists vendor dashboards.
+            {"env": "OPENAI_COMPAT_API_KEY",
+             "label": "API key (from your vendor's dashboard)"},
+            {"env": "OPENAI_COMPAT_API_BASE", "label": "OpenAI-compatible base URL",
+             "help": (
+                 "Examples: https://api.groq.com/openai/v1 (Groq), "
+                 "https://api.together.xyz/v1 (Together AI), "
+                 "https://api.mistral.ai/v1 (Mistral La Plateforme), "
+                 "https://openrouter.ai/api/v1 (OpenRouter). "
+                 "For Ollama Cloud, see https://docs.ollama.com for the current endpoint."
+             ),
+             "secret": False},
+        ],
     },
 ]
 
@@ -90,7 +171,11 @@ ADD_ONS = [
             {"env": "ANTHROPIC_API_KEY", "label": "Anthropic API key",
              "url": "https://console.anthropic.com/settings/keys"},
         ],
-        "exclude_for": ["Anthropic"],
+        # Skip the Anthropic add-on prompt for users already on a provider
+        # that hosts Claude — direct Anthropic API or Azure AI Foundry's
+        # Claude catalog. The slides agent's auto-upgrade still works since
+        # the credentials it reads belong to the chosen route.
+        "exclude_for": ["Anthropic", "Azure AI Foundry"],
     },
     {
         "id":          "composio",
@@ -193,6 +278,35 @@ def _ask_secret(label: str, url: str) -> str:
     return getpass.getpass(f"  {label}: ").strip()
 
 
+def _ask_text(label: str, default: str = "", help_hint: str = "") -> str:
+    if help_hint:
+        console.print(f"  [dim]{help_hint}[/dim]")
+    if _HAS_QUESTIONARY:
+        val = questionary.text(f"  {label}: ", default=default, style=_QSTYLE).ask()
+        return (val or "").strip() or default
+    suffix = f" [{default}]" if default else ""
+    raw = input(f"  {label}{suffix}: ").strip()
+    return raw or default
+
+
+def _ask_provider_key(spec: dict, existing_value: str) -> str:
+    """Ask for one provider env value, dispatching on `secret` flag.
+
+    secret=True (default) → password prompt + URL hint.
+    secret=False → plaintext prompt + optional help hint + default fallback.
+    """
+    is_secret = spec.get("secret", True)
+    if is_secret:
+        if spec.get("url"):
+            console.print(f"  [dim]Get yours at[/dim] [link={spec['url']}]{spec['url']}[/link]")
+        if _HAS_QUESTIONARY:
+            val = questionary.password(f"  {spec['label']}: ", style=_QSTYLE).ask()
+            return (val or "").strip() or existing_value
+        return getpass.getpass(f"  {spec['label']}: ").strip() or existing_value
+    default = existing_value or spec.get("default", "")
+    return _ask_text(spec["label"], default=default, help_hint=spec.get("help", ""))
+
+
 def _ask_confirm(message: str, default: bool = True) -> bool:
     if _HAS_QUESTIONARY:
         return questionary.confirm(message, default=default, style=_QSTYLE).ask()
@@ -232,23 +346,47 @@ def run_onboarding() -> None:
     ]
     provider = _ask_select("Choose your primary AI provider:", provider_choices)
 
-    # ── Step 2: API key ───────────────────────────────────────────────────────
-    _step(2, "API Key")
+    # ── Step 2: provider credentials ─────────────────────────────────────────
+    _step(2, "Provider Credentials")
 
-    existing_key = existing.get(provider["env_key"], "")
-    if existing_key:
-        console.print(f"  [dim]{provider['env_key']} is already configured.[/dim]")
-        if _ask_confirm("  Update it?", default=False):
-            key = _ask_secret(f"{provider['name']} API key", provider["url"])
-            updates[provider["env_key"]] = key or existing_key
-        else:
-            updates[provider["env_key"]] = existing_key
+    for key_spec in provider["keys"]:
+        env_name = key_spec["env"]
+        existing_val = existing.get(env_name, "")
+        is_secret = key_spec.get("secret", True)
+
+        if existing_val:
+            display = "***" if is_secret else existing_val
+            console.print(f"  [dim]{env_name} is already configured ({display}).[/dim]")
+            if not _ask_confirm("  Update it?", default=False):
+                updates[env_name] = existing_val
+                continue
+
+        new_val = _ask_provider_key(key_spec, existing_val)
+        if new_val:
+            updates[env_name] = new_val
+        elif existing_val:
+            updates[env_name] = existing_val
+
+    # Build DEFAULT_MODEL — providers with `{model}` template prompt for the name.
+    if "{model}" in provider["default_model"]:
+        existing_model = existing.get("DEFAULT_MODEL", "")
+        existing_suffix = ""
+        if existing_model and "/" in existing_model:
+            existing_suffix = existing_model.rsplit("/", 1)[-1]
+        # Loop until the user enters something — empty entry would leave
+        # DEFAULT_MODEL unset and produce a confusing summary table.
+        while True:
+            model_name = _ask_text(
+                provider.get("model_label", "Model name"),
+                default=existing_suffix,
+                help_hint=provider.get("model_help", ""),
+            )
+            if model_name:
+                updates["DEFAULT_MODEL"] = provider["default_model"].replace("{model}", model_name)
+                break
+            console.print("  [red]A model name is required.[/red]")
     else:
-        key = _ask_secret(f"{provider['name']} API key", provider["url"])
-        if key:
-            updates[provider["env_key"]] = key
-
-    updates["DEFAULT_MODEL"]       = provider["default_model"]
+        updates["DEFAULT_MODEL"] = provider["default_model"]
 
     # ── Step 3: add-ons ───────────────────────────────────────────────────────
     _step(3, "Add-ons  [dim](optional)[/dim]")
@@ -300,7 +438,10 @@ def run_onboarding() -> None:
     table.add_column(style="dim", no_wrap=True)
     table.add_column()
     table.add_row("Provider", f"[cyan]{provider['name']}[/cyan]")
-    table.add_row("Model",    f"[cyan]{provider['default_model']}[/cyan]")
+    # Show the resolved DEFAULT_MODEL (with {model} substituted for templated
+    # providers like azure_ai/{model}), not the raw template.
+    resolved_model = updates.get("DEFAULT_MODEL", provider["default_model"])
+    table.add_row("Model",    f"[cyan]{resolved_model}[/cyan]")
     table.add_row(".env",     f"[cyan]{ENV_PATH}[/cyan]")
     saved = [k for k, v in updates.items() if v and not k.startswith("DEFAULT_")]
     if saved:

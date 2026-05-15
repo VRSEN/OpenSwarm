@@ -157,12 +157,15 @@ def _bootstrap() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# Truly optional integrations beyond the primary provider — used for the
+# startup summary. Provider keys (OpenAI, Anthropic, Google, Azure, Ollama,
+# OpenAI-compatible) are no longer listed here since they're now first-class
+# choices rather than add-ons; selecting Azure as the primary shouldn't make
+# the user feel they're missing Anthropic.
 _OPTIONAL_INTEGRATIONS = [
     ("Composio (10,000+ external integrations)", ["COMPOSIO_API_KEY", "COMPOSIO_USER_ID"]),
-    ("Anthropic / Claude models", ["ANTHROPIC_API_KEY"]),
     ("Search", ["SEARCH_API_KEY"]),
     ("Fal.ai (video & audio generation)", ["FAL_KEY"]),
-    ("Google AI / Gemini", ["GOOGLE_API_KEY"]),
     ("Pexels (stock images)", ["PEXELS_API_KEY"]),
     ("Pixabay (stock images)", ["PIXABAY_API_KEY"]),
     ("Unsplash (stock images)", ["UNSPLASH_ACCESS_KEY"]),
@@ -253,9 +256,16 @@ def main() -> None:
 
     from swarm import create_agency
 
-    onboard_flag = Path(tempfile.gettempdir()) / "_openswarm_onboard.flag"
+    # User-scoped flag directory so a co-tenant on /tmp can't force a
+    # spurious restart by touching our flag files (Linux/macOS DoS vector).
+    flag_dir = Path(tempfile.gettempdir()) / f"openswarm_{os.getuid() if hasattr(os, 'getuid') else 'user'}"
+    flag_dir.mkdir(mode=0o700, exist_ok=True)
+    onboard_flag = flag_dir / "_onboard.flag"
+    switch_flag = flag_dir / "_switch.flag"
     os.environ["OPENSWARM_ONBOARD_FLAG"] = str(onboard_flag)
+    os.environ["OPENSWARM_SWITCH_FLAG"] = str(switch_flag)
     onboard_flag.unlink(missing_ok=True)
+    switch_flag.unlink(missing_ok=True)
 
     while True:
         import logging
@@ -298,6 +308,18 @@ def main() -> None:
             from onboard import run_onboarding
             run_onboarding()
             load_dotenv(override=True)
+        elif switch_flag.exists():
+            switch_flag.unlink(missing_ok=True)
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
+            logging.disable(logging.NOTSET)
+            print("\nApplying provider switch — restarting agency with new DEFAULT_MODEL…")
+            load_dotenv(override=True)
+            # Sanity check — refuse to loop into create_agency() if the
+            # write somehow ended up empty (disk full, race).
+            if not os.getenv("DEFAULT_MODEL", "").strip():
+                print("ERROR: DEFAULT_MODEL is empty after switch. Check .env.")
+                break
         else:
             break
 
