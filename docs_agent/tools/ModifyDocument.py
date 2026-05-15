@@ -7,7 +7,7 @@ from typing import Any, Literal, Optional
 from agency_swarm.tools import BaseTool
 from pydantic import Field
 
-from .utils.doc_file_utils import get_project_dir
+from .utils.doc_file_utils import get_project_dir, normalize_document_name
 from .utils.html_validation import build_unsupported_error, find_unsupported_html
 
 
@@ -94,9 +94,7 @@ class ModifyDocument(BaseTool):
             if not project_dir.exists():
                 return f"Error: Project '{self.project_name}' not found."
 
-            doc_name = (
-                self.document_name.replace(".html", "").replace(".docx", "").replace(".md", "")
-            )
+            doc_name = normalize_document_name(self.document_name)
             source_path = project_dir / f"{doc_name}.source.html"
             md_path = project_dir / f"{doc_name}.md"
 

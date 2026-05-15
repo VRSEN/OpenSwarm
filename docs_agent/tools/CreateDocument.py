@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from .utils.html_validation import build_unsupported_error, find_unsupported_html
 from .utils.html_docx_playwright import _launch_chromium_with_install
 from .utils.html_docx_constants import _UA_RESET_STYLE
-from .utils.doc_file_utils import get_project_dir
+from .utils.doc_file_utils import get_project_dir, normalize_document_name
 from .utils.html_docx_images import embed_local_images
 
 
@@ -87,11 +87,7 @@ Markdown example:
             (project_dir / "assets").mkdir(exist_ok=True)
 
             # Strip extension if the caller included one
-            doc_name = (
-                self.document_name.replace(".html", "")
-                .replace(".docx", "")
-                .replace(".md", "")
-            )
+            doc_name = normalize_document_name(self.document_name)
 
             content_value = self.content.value
             if not content_value:
