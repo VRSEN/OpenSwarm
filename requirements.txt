@@ -42,6 +42,7 @@ beautifulsoup4
 cairosvg
 weasyprint
 html2text
+markdown-it-py
 google-genai
 opencv-python-headless
 moviepy<2
