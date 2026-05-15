@@ -41,7 +41,7 @@ Agents (except for Agent Swarm agent) can extend their functionality by adding c
 
 - For standard tasks, prefer shared tools (`ManageConnections`, `SearchTools`, `FindTools`, `ExecuteTool`).
 - If `ProgrammaticToolCalling` is unavoidable, direct calls to `composio.tools.execute(...)` and `composio.tools.get(...)` are allowed.
-- n `ProgrammaticToolCalling`, `composio` (the injected Composio client object for `tools.get`/`tools.execute`) and `user_id` are automatically available at runtime.
+- In `ProgrammaticToolCalling`, `composio` (the injected Composio client object for `tools.get`/`tools.execute`) and `user_id` are automatically available at runtime.
 Do not import them manually unless explicitly needed for compatibility.
 
 ```python
