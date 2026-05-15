@@ -1,7 +1,7 @@
 [project]
 name = "open-swarm"
 description = "An open-source multi-agent AI team built on Agency Swarm and the OpenAI Agents SDK"
-version = "1.0.1-rc.1"
+version = "1.0.1-rc.2"
 license = { text = "MIT" }
 keywords = ["agency-swarm", "openai", "multi-agent", "open-source", "openswarm"]
 requires-python = ">=3.12"

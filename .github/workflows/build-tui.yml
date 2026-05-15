@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  AGENTSWARM_CLI_VERSION: 1.4.32
+  AGENTSWARM_CLI_VERSION: 1.4.33
 
 jobs:
   prepare:
@@ -140,7 +140,7 @@ jobs:
       - name: Build binary
         working-directory: agentswarm-cli/packages/opencode
         env:
-          OPENCODE_CHANNEL: latest
+          OPENCODE_CHANNEL: ${{ needs.prepare.outputs.npm_tag }}
           AGENTSWARM_PRODUCT_DISPLAY_NAME: OpenSwarm
           AGENTSWARM_PRODUCT_COMMAND: openswarm
           AGENTSWARM_PRODUCT_PACKAGE_NAME: "@vrsen/openswarm"

@@ -1,6 +1,6 @@
 {
     "name": "@vrsen/openswarm",
-    "version": "1.0.1-rc.1",
+    "version": "1.0.1-rc.2",
     "description": "An open-source multi-agent AI team built on Agency Swarm",
     "license": "MIT",
     "publishConfig": {
@@ -36,7 +36,7 @@
         "postinstall": "node -e \"const fs=require('fs');const path=require('path');const cp=require('child_process');const pkg=__dirname;const patchTarget=path.join(pkg,'node_modules','dom-to-pptx');const patchCli=path.join(pkg,'node_modules','patch-package','index.js');if(fs.existsSync(patchTarget)&&fs.existsSync(patchCli)){cp.execFileSync(process.execPath,[patchCli],{cwd:pkg,stdio:'inherit'});}try{fs.chmodSync(path.join(pkg,'bin','openswarm'),0o755)}catch(e){}\""
     },
     "dependencies": {
-        "@vrsen/agentswarm": "1.4.32",
+        "@vrsen/agentswarm": "1.4.33",
         "dom-to-pptx": "1.1.5",
         "patch-package": "^8.0.1",
         "playwright": "^1.59.1",
