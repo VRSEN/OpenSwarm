@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <form class="panel" onsubmit="createWorkspace(event)">
+    <div class="toolbar"><strong>New workspace</strong></div>
+    <div class="form-row"><input name="name" placeholder="Workspace name" required></div>
+    <div class="form-row"><textarea name="description" placeholder="Description"></textarea></div>
+    <button class="button primary" type="submit">Create</button>
+  </form>
+  <div class="panel">
+    <strong>Isolation</strong>
+    <p class="muted">Every workspace, run, artifact, secret, and audit event is scoped to the signed-in user's organization.</p>
+  </div>
+</section>
+<section class="panel" style="margin-top:14px">
+  <table><thead><tr><th>Name</th><th>Description</th><th>Created</th></tr></thead><tbody data-workspaces></tbody></table>
+</section>
+{% endblock %}
+

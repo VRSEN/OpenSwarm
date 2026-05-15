@@ -12,6 +12,14 @@ dependencies = [
     "rich",
     "fastapi",
     "uvicorn",
+    "jinja2",
+    "sqlalchemy>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "cryptography>=42.0.0",
+    "email-validator>=2.0.0",
+    "psycopg[binary]>=3.1.0",
     "composio==0.8.0",
     "composio-openai-agents==0.8.0",
     "pytz",
@@ -58,6 +66,7 @@ dependencies = [
 
 [project.scripts]
 openswarm = "run_utils:main"
+openswarm-enterprise = "enterprise.cli:main"
 
 [tool.setuptools]
 py-modules = ["agency", "swarm", "helpers", "config", "onboard", "server"]

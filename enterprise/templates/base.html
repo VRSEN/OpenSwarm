@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · OpenSwarm Enterprise</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-page="{{ title | lower }}">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="mark"></span><span>OpenSwarm Enterprise</span></div>
+      <nav class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/runs">Runs</a>
+        <a href="/agents">Agents</a>
+        <a href="/workspaces">Workspaces</a>
+        <a href="/integrations">Integrations</a>
+        <a href="/audit">Audit Logs</a>
+        <a href="/billing">Billing</a>
+        <a href="/admin">Admin</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>{{ title }}</h1>
+          <div class="muted" data-me>Enterprise control plane</div>
+        </div>
+        <button class="button" data-logout>Log out</button>
+      </div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

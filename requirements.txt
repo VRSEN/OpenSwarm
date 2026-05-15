@@ -2,6 +2,14 @@ agency-swarm[fastapi,jupyter,litellm]>=1.9.7
 questionary>=2.0.0
 fastapi
 uvicorn
+jinja2
+sqlalchemy>=2.0.0
+pydantic-settings>=2.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+cryptography>=42.0.0
+email-validator>=2.0.0
+psycopg[binary]>=3.1.0
 composio==0.8.0
 composio-openai-agents==0.8.0
 pytz
