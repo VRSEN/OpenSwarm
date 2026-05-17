@@ -23,6 +23,17 @@ from collections.abc import Sequence
 
 DEFAULT_PROMPT = "Reply exactly OPEN_SWARM_RUN_SMOKE_OK."
 DEFAULT_EXPECT = "OPEN_SWARM_RUN_SMOKE_OK"
+EXPECTED_AGENCY_NAME = "OpenSwarm"
+EXPECTED_ENTRY_AGENT = "Orchestrator"
+EXPECTED_SPECIALIST_AGENTS = [
+    "General Agent",
+    "Slides Agent",
+    "Deep Research Agent",
+    "Data Analyst",
+    "Docs Agent",
+    "Video Agent",
+    "Image Agent",
+]
 
 
 def run(cmd: Sequence[str], *, cwd: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -64,6 +75,10 @@ def strip_ansi(text: str) -> str:
 
 def write(fd: int, text: str) -> None:
     os.write(fd, text.encode())
+
+
+def compact(text: str) -> str:
+    return re.sub(r"\s+", "", text)
 
 
 def terminate(process: subprocess.Popen[bytes]) -> None:
@@ -123,6 +138,7 @@ def run_tui_smoke(
     package_dir: pathlib.Path,
     root: pathlib.Path,
     env: dict[str, str],
+    check: str,
     prompt: str,
     expected: str,
     timeout: int,
@@ -143,34 +159,65 @@ def run_tui_smoke(
     raw = ""
     plain = ""
     sent_confirm = False
+    sent_agents_command = False
+    verified_agents = False
+    closed_agents_at: float | None = None
     sent_prompt = False
+    saw_expected = False
     deadline = time.monotonic() + timeout
-    expected_compact = re.sub(r"\s+", "", expected)
+    expected_compact = compact(expected)
+    expected_agent_terms = [EXPECTED_AGENCY_NAME, EXPECTED_ENTRY_AGENT, *EXPECTED_SPECIALIST_AGENTS]
+    expected_agent_compact = [compact(term) for term in expected_agent_terms]
 
     try:
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 break
             ready, _, _ = select.select([master_fd], [], [], 1)
-            if not ready:
-                continue
-            chunk = os.read(master_fd, 8192)
-            if not chunk:
-                continue
-            decoded = chunk.decode(errors="replace")
-            raw += decoded
-            plain = strip_ansi(raw)
-            compact = re.sub(r"\s+", "", plain)
+            if ready:
+                chunk = os.read(master_fd, 8192)
+                if chunk:
+                    decoded = chunk.decode(errors="replace")
+                    raw += decoded
+                    plain = strip_ansi(raw)
 
-            if not sent_confirm and "Createalocal`.venv`inthisproject?" in compact:
+            compact_plain = compact(plain)
+
+            if not sent_confirm and "Createalocal`.venv`inthisproject?" in compact_plain:
                 write(master_fd, "\r")
                 sent_confirm = True
 
-            if not sent_prompt and "AgencySwarmDefault" in compact and "ctrl+pcommands" in compact:
+            run_mode_ready = "AgencySwarmDefault" in compact_plain and "ctrl+pcommands" in compact_plain
+
+            if check in {"agents", "all"} and not sent_agents_command and run_mode_ready:
+                write(master_fd, "/agents\r")
+                sent_agents_command = True
+
+            if sent_agents_command and not verified_agents and "Selectswarm" in compact_plain:
+                missing = [term for term, packed in zip(expected_agent_terms, expected_agent_compact) if packed not in compact_plain]
+                if not missing:
+                    verified_agents = True
+                    write(master_fd, "\x1b")
+                    closed_agents_at = time.monotonic()
+                    if check == "agents":
+                        return plain
+
+            if check == "prompt" and run_mode_ready:
+                verified_agents = True
+                closed_agents_at = closed_agents_at or time.monotonic()
+
+            if (
+                check in {"prompt", "all"}
+                and verified_agents
+                and not sent_prompt
+                and closed_agents_at is not None
+                and time.monotonic() - closed_agents_at > 0.5
+            ):
                 write(master_fd, prompt + "\r")
                 sent_prompt = True
 
-            if expected in plain or expected_compact in compact:
+            if expected in plain or expected_compact in compact_plain:
+                saw_expected = True
                 return plain
     finally:
         terminate(process)
@@ -181,7 +228,8 @@ def run_tui_smoke(
     log_path.write_text(plain or raw, encoding="utf-8")
     raise RuntimeError(
         "OpenSwarm Run-mode smoke test did not reach the expected response. "
-        f"sent_confirm={sent_confirm} sent_prompt={sent_prompt} log={log_path}"
+        f"sent_confirm={sent_confirm} sent_agents_command={sent_agents_command} "
+        f"verified_agents={verified_agents} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
     )
 
 
@@ -189,6 +237,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=["local", "npm"], default="local")
     parser.add_argument("--npm-spec")
+    parser.add_argument("--check", choices=["all", "agents", "prompt"], default="all")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--expect", default=DEFAULT_EXPECT)
     parser.add_argument("--timeout", type=int, default=1200)
@@ -220,10 +269,14 @@ def main() -> int:
     try:
         launcher = install_package(repo, root, args.source, npm_spec, env)
         package_dir = root / "node_modules" / "@vrsen" / "openswarm"
-        plain = run_tui_smoke(launcher, package_dir, root, env, args.prompt, args.expect, args.timeout)
+        plain = run_tui_smoke(launcher, package_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
         if "Agency Swarm Default" not in plain:
             raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
-        print(f"OpenSwarm Run-mode smoke passed in {package_dir}")
+        if args.check in {"agents", "all"}:
+            print(f"OpenSwarm /agents smoke passed with {len(EXPECTED_SPECIALIST_AGENTS)} specialists visible")
+        if args.check in {"prompt", "all"}:
+            print("OpenSwarm live prompt smoke passed")
+        print(f"OpenSwarm smoke root package: {package_dir}")
         return 0
     finally:
         if args.keep_root:

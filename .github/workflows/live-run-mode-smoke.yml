@@ -15,7 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run installed OpenSwarm through Agency Swarm Run mode
+      - name: Verify OpenSwarm agent roster through TUI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 scripts/smoke-run-mode.py --source local
+        run: python3 scripts/smoke-run-mode.py --source local --check agents
+      - name: Verify live Agency Swarm Run-mode prompt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 scripts/smoke-run-mode.py --source local --check prompt
