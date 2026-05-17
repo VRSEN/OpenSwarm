@@ -2,6 +2,20 @@ name: Live Run Mode Smoke
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/live-run-mode-smoke.yml'
+      - 'bin/openswarm'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'pyproject.toml'
+      - 'scripts/smoke-run-mode.py'
+      - 'swarm.py'
+      - '*_agent/**'
+      - 'data_analyst_agent/**'
+      - 'deep_research/**'
+      - 'orchestrator/**'
+      - 'virtual_assistant/**'
 
 jobs:
   smoke:
