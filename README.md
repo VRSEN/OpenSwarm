@@ -101,6 +101,7 @@ The setup wizard walks you through everything, but you'll need at least one of t
 
 - `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
 - `ANTHROPIC_API_KEY` - For Claude models
+- `MINIMAX_API_KEY` - For MiniMax models (MiniMax-M2.7)
 
 **Optional superpowers:**
 
