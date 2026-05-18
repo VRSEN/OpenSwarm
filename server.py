@@ -1,4 +1,11 @@
 # FastAPI entry point — run with: python server.py
+#
+# NOTE: This entry point creates the agency once at startup and serves it
+# for the lifetime of the process. The SwitchProvider tool registered on
+# the orchestrator writes to .env and signals a restart, but only the TUI
+# loop in run_utils.main() reads that signal — the FastAPI surface does
+# not. Provider switches issued through this server appear to succeed but
+# stay pinned to the original DEFAULT_MODEL until the server is restarted.
 
 import logging
 from dotenv import load_dotenv

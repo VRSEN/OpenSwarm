@@ -3,6 +3,7 @@ from openai.types.shared import Reasoning
 from dotenv import load_dotenv
 
 from config import get_default_model, is_openai_provider
+from orchestrator.tools import SwitchProvider
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ def create_orchestrator() -> Agent:
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
         ),
+        tools=[SwitchProvider],
         conversation_starters=[
             "What can this agency do?",
             "Build a full launch package: research, slides, docs, and creative assets.",
