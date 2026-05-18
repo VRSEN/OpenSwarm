@@ -20,6 +20,12 @@ _trusted_message_context: contextvars.ContextVar[dict[str, Any] | None] = contex
 )
 _trusted_thread_managers: dict[int, dict[str, Any]] = {}
 _MESSAGE_TYPES = {"message"}
+_TOOL_ERROR_PREFIXES = ("❌", "error", "failed", "failure", "html validation failed", "an error occurred")
+_logged_tool_failure_keys: dict[tuple[int, str, str], float] = {}
+
+
+class ToolReturnedError(Exception):
+    """Marker exception for tools that report failure as their return value."""
 
 
 class CompositeRunHooks(RunHooksBase[Any, Any]):
@@ -148,10 +154,20 @@ class OpenSwarmTelemetryAgentHooks(AgentHooksBase[Any, Any]):
 
     async def on_tool_end(self, context: Any, agent: Any, tool: Any, result: str) -> None:
         tool_name = _tool_name(tool)
-        started = self._tool_start_times.pop(_context_tool_key(context, agent, tool_name), None)
-        props = _agent_props(context, agent, status="completed", latency_ms=_elapsed_ms(started))
-        props["tool_name"] = tool_name
-        _safe_capture("tool_invoked", props)
+        key = _context_tool_key(context, agent, tool_name)
+        started = self._tool_start_times.pop(key, None)
+        if _logged_tool_failure_keys.pop(key, None) is not None:
+            return
+        if _is_tool_error_result(result):
+            _capture_tool_failure(
+                context,
+                agent,
+                tool_name,
+                started_at=started,
+                error=ToolReturnedError(),
+            )
+            return
+        _capture_tool_invoked(context, agent, tool_name, status="completed", started_at=started)
 
     async def on_handoff(self, context: Any, agent: Any, source: Any) -> None:
         source_name = _agent_name(source)
@@ -293,7 +309,9 @@ def instrument_agency(agency: Any) -> Any:
 
     install_thread_manager_telemetry()
     _register_thread_manager_context(agency)
-    _attach_agent_hooks(_iter_agents(agency))
+    agents = _iter_agents(agency)
+    _attach_agent_hooks(agents)
+    _wrap_agent_tools(agents)
     _wrap_agency_methods(agency)
     if getattr(agency, "persistence_hooks", None) is not None:
         agency.persistence_hooks = compose_run_hooks(agency.persistence_hooks)
@@ -409,6 +427,63 @@ def _attach_agent_hooks(agents: Iterable[Any]) -> None:
             agent.hooks = compose_agent_hooks(getattr(agent, "hooks", None))
         except Exception:
             logger.debug("Could not attach telemetry hooks to agent", exc_info=True)
+
+
+def _wrap_agent_tools(agents: Iterable[Any]) -> None:
+    for agent in agents:
+        for tool in _iter_agent_tools(agent):
+            try:
+                _wrap_tool_invocation(agent, tool)
+            except Exception:
+                logger.debug("Could not attach telemetry wrapper to tool", exc_info=True)
+
+
+def _iter_agent_tools(agent: Any) -> list[Any]:
+    tools = getattr(agent, "tools", None)
+    if tools is None:
+        return []
+    if isinstance(tools, dict):
+        return list(tools.values())
+    return list(tools or [])
+
+
+def _wrap_tool_invocation(agent: Any, tool: Any) -> None:
+    if getattr(tool, "_openswarm_telemetry_wrapped", False):
+        return
+    original = getattr(tool, "on_invoke_tool", None)
+    if not callable(original):
+        return
+    tool_name = _tool_name(tool)
+
+    async def on_invoke_tool_with_telemetry(context: Any, args_json: str) -> Any:
+        started = time.monotonic()
+        try:
+            result = original(context, args_json)
+            if inspect.isawaitable(result):
+                result = await result
+            if _is_tool_error_result(result):
+                _remember_tool_failure_logged(context, agent, tool_name)
+                _capture_tool_failure(
+                    context,
+                    agent,
+                    tool_name,
+                    started_at=started,
+                    error=ToolReturnedError(),
+                )
+            return result
+        except BaseException as exc:
+            _remember_tool_failure_logged(context, agent, tool_name)
+            _capture_tool_failure(
+                context,
+                agent,
+                tool_name,
+                started_at=started,
+                error=exc,
+            )
+            raise
+
+    tool.on_invoke_tool = on_invoke_tool_with_telemetry
+    tool._openswarm_telemetry_wrapped = True
 
 
 def _iter_agents(agency: Any) -> list[Any]:
@@ -549,6 +624,65 @@ def _agent_props(context: Any, agent: Any, **extra: Any) -> dict[str, Any]:
             props[target_key] = value
     props.update({key: value for key, value in extra.items() if value is not None})
     return props
+
+
+def _capture_tool_invoked(
+    context: Any,
+    agent: Any,
+    tool_name: str,
+    *,
+    status: str,
+    started_at: float | None,
+) -> dict[str, Any]:
+    props = _agent_props(context, agent, status=status, latency_ms=_elapsed_ms(started_at))
+    props["tool_name"] = tool_name
+    _safe_capture("tool_invoked", props)
+    return props
+
+
+def _capture_tool_failure(
+    context: Any,
+    agent: Any,
+    tool_name: str,
+    *,
+    started_at: float | None,
+    error: BaseException,
+) -> None:
+    props = _capture_tool_invoked(context, agent, tool_name, status="error", started_at=started_at)
+    _safe_capture_error(error, category="tool", properties=props)
+
+
+def _remember_tool_failure_logged(context: Any, agent: Any, tool_name: str) -> None:
+    now = time.monotonic()
+    stale_before = now - 300
+    for key, logged_at in list(_logged_tool_failure_keys.items()):
+        if logged_at < stale_before:
+            _logged_tool_failure_keys.pop(key, None)
+    _logged_tool_failure_keys[_context_tool_key(context, agent, tool_name)] = now
+
+
+def _is_tool_error_result(result: Any) -> bool:
+    if isinstance(result, str):
+        return _is_tool_error_text(result)
+    if isinstance(result, dict):
+        status = _safe_text(result.get("status"))
+        if status and status.strip().lower() in {"error", "failed", "failure"}:
+            return True
+        error_value = result.get("error")
+        if isinstance(error_value, bool):
+            return error_value
+        return error_value is not None
+    if isinstance(result, list | tuple):
+        return any(_is_tool_error_result(item) for item in result)
+    text = getattr(result, "text", None)
+    if isinstance(text, str):
+        return _is_tool_error_text(text)
+    return False
+
+
+def _is_tool_error_text(text: str) -> bool:
+    normalized = text.strip().lower()
+    return any(normalized.startswith(prefix) for prefix in _TOOL_ERROR_PREFIXES)
 
 
 def _safe_capture(event: str, properties: dict[str, Any] | None = None) -> bool:
