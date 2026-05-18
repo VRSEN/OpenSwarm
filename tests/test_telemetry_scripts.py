@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -19,6 +20,16 @@ from scripts.create_posthog_dashboard import (
 )
 from scripts.smoke_telemetry import SMOKE_EVENT, build_smoke_properties
 from scripts.write_telemetry_config import build_config_source
+
+
+def _load_dashboard_revision_module():
+    repo = Path(__file__).resolve().parents[1]
+    module_path = repo / "scripts" / "1779098400_update_posthog_dashboard_tool_errors.py"
+    spec = importlib.util.spec_from_file_location("dashboard_tool_error_revision", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_config_writer_builds_generated_module() -> None:
@@ -130,6 +141,36 @@ def test_smoke_script_uses_manual_smoke_event() -> None:
     assert "POSTHOG_API_KEY" not in str(props)
 
 
+def test_tool_error_dashboard_revision_payloads() -> None:
+    revision = _load_dashboard_revision_module()
+    payloads = revision.build_tool_error_insight_payloads(123)
+    names = {payload["name"] for payload in payloads}
+
+    assert names == {
+        "OpenSwarm / Tool errors by tool",
+        "OpenSwarm / Tool success/error by tool",
+    }
+    tool_errors = next(payload for payload in payloads if payload["name"] == "OpenSwarm / Tool errors by tool")
+    query = tool_errors["query"]["source"]["query"]
+    assert "event = 'error'" in query
+    assert "properties.error_category = 'tool'" in query
+    assert "properties.tool_name" in query
+    success_error = next(payload for payload in payloads if payload["name"] == "OpenSwarm / Tool success/error by tool")
+    query = success_error["query"]["source"]["query"]
+    assert "event = 'tool_invoked'" in query
+    assert "properties.status" in query
+    assert "properties.tool_name" in query
+
+
+def test_tool_error_dashboard_revision_dry_run_has_no_secret_fields() -> None:
+    revision = _load_dashboard_revision_module()
+    payload = revision.build_dry_run_payload("env_123", "dash_456")
+
+    assert payload["insights"][0]["path"] == "/api/environments/env_123/insights/"
+    assert payload["insights"][0]["payload"]["dashboards"] == ["dash_456"]
+    assert "POSTHOG_PERSONAL_API_KEY" not in str(payload)
+
+
 def test_artifact_checker_detects_stale_generated_config(tmp_path) -> None:
     build_dir = tmp_path / "build" / "lib"
     build_dir.mkdir(parents=True)
@@ -177,7 +218,8 @@ def test_python_wheel_excludes_stale_generated_config(tmp_path) -> None:
 
 
 def test_npm_pack_includes_generated_config_after_writer() -> None:
-    if not shutil.which("npm"):
+    npm = shutil.which("npm.cmd") or shutil.which("npm")
+    if not npm:
         pytest.skip("npm is not installed")
 
     repo = Path(__file__).resolve().parents[1]
@@ -199,7 +241,7 @@ def test_npm_pack_includes_generated_config_after_writer() -> None:
         assert writer.returncode == 0, writer.stderr
 
         packed = subprocess.run(
-            ["npm", "pack", "--dry-run", "--json"],
+            [npm, "pack", "--dry-run", "--json"],
             cwd=repo,
             capture_output=True,
             text=True,

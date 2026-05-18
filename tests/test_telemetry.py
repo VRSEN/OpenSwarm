@@ -46,12 +46,14 @@ def telemetry_events(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.setattr(telemetry, "_MODULE_DIR", tmp_path)
     telemetry._reset_for_tests()
     telemetry_hooks._trusted_thread_managers.clear()
+    telemetry_hooks._logged_tool_failure_keys.clear()
     telemetry_hooks._trusted_message_context.set(None)
     events: list[dict] = []
     telemetry.set_posthog_factory_for_tests(lambda api_key, host: FakePostHog(api_key, host, events))
     yield events
     telemetry._reset_for_tests()
     telemetry_hooks._trusted_thread_managers.clear()
+    telemetry_hooks._logged_tool_failure_keys.clear()
     telemetry_hooks._trusted_message_context.set(None)
 
 
@@ -228,6 +230,8 @@ def test_configured_provider_ignores_unsafe_default_model(
 ) -> None:
     monkeypatch.setenv("DEFAULT_MODEL", "gpt-5.2 api_key=secret")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
     assert telemetry.configured_provider() is None
 
@@ -587,3 +591,230 @@ def test_tool_invoked_payload_drops_content_like_properties(monkeypatch: pytest.
     assert "tool_args" not in props
     assert "tool_result" not in props
     assert "secret" not in str(props)
+
+
+def test_tool_returned_error_emits_tool_failure_events(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+    context = SimpleNamespace(context=SimpleNamespace())
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2")
+    tool = SimpleNamespace(name="InsertNewSlides")
+
+    async def run_hooks() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        await hooks.on_tool_end(context, agent, tool, "❌ private error output /Users/person/project")
+
+    asyncio.run(run_hooks())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+    tool_props = telemetry_events[0]["properties"]
+    error_props = telemetry_events[1]["properties"]
+    assert tool_props["status"] == "error"
+    assert tool_props["tool_name"] == "InsertNewSlides"
+    assert error_props["error_category"] == "tool"
+    assert error_props["error_type"] == "ToolReturnedError"
+    assert error_props["tool_name"] == "InsertNewSlides"
+    assert "private error output" not in str(telemetry_events)
+    assert "/Users/person/project" not in str(telemetry_events)
+
+
+def test_tool_returned_error_detects_error_without_colon(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+    context = SimpleNamespace(context=SimpleNamespace())
+    agent = SimpleNamespace(name="Virtual Assistant", model="gpt-5.2")
+    tool = SimpleNamespace(name="FindEmails")
+
+    async def run_hooks() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        await hooks.on_tool_end(context, agent, tool, "Error searching Gmail: private")
+
+    asyncio.run(run_hooks())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+    assert telemetry_events[0]["properties"]["status"] == "error"
+    assert telemetry_events[1]["properties"]["error_type"] == "ToolReturnedError"
+    assert "private" not in str(telemetry_events)
+
+
+def test_tool_returned_error_detects_modify_slide_validation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+    context = SimpleNamespace(context=SimpleNamespace())
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2")
+    tool = SimpleNamespace(name="ModifySlide")
+
+    async def run_hooks() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        await hooks.on_tool_end(context, agent, tool, "HTML validation failed after 3 attempts:\nprivate details")
+
+    asyncio.run(run_hooks())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+    assert telemetry_events[0]["properties"]["status"] == "error"
+    assert telemetry_events[1]["properties"]["error_type"] == "ToolReturnedError"
+    assert "private details" not in str(telemetry_events)
+
+
+def test_tool_success_still_emits_completed_invocation(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+    context = SimpleNamespace(context=SimpleNamespace())
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2")
+    tool = SimpleNamespace(name="InsertNewSlides")
+
+    async def run_hooks() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        await hooks.on_tool_end(context, agent, tool, "Created slide")
+
+    asyncio.run(run_hooks())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked"]
+    props = telemetry_events[0]["properties"]
+    assert props["status"] == "completed"
+    assert props["tool_name"] == "InsertNewSlides"
+
+
+def test_tool_invoke_exception_emits_tool_failure_and_reraises(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+
+    async def invoke_tool(context, args_json):
+        raise RuntimeError("secret prompt in /Users/person/project")
+
+    tool = SimpleNamespace(name="InsertNewSlides", on_invoke_tool=invoke_tool)
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2", tools=[tool])
+    context = SimpleNamespace(context=SimpleNamespace())
+
+    telemetry_hooks._wrap_agent_tools([agent])
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(tool.on_invoke_tool(context, '{"task_brief":"secret"}'))
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+    tool_props = telemetry_events[0]["properties"]
+    error_props = telemetry_events[1]["properties"]
+    assert tool_props["status"] == "error"
+    assert tool_props["tool_name"] == "InsertNewSlides"
+    assert error_props["error_category"] == "tool"
+    assert error_props["error_type"] == "RuntimeError"
+    assert "secret prompt" not in str(telemetry_events)
+    assert "task_brief" not in str(telemetry_events)
+    assert "/Users/person/project" not in str(telemetry_events)
+
+
+def test_tool_invoke_sdk_error_result_emits_tool_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+
+    async def invoke_tool(context, args_json):
+        return "An error occurred while running the tool. Please try again. Error: private"
+
+    tool = SimpleNamespace(name="TelemetryRaiseError", on_invoke_tool=invoke_tool)
+    agent = SimpleNamespace(name="General Agent", model="gpt-5.2", tools=[tool])
+    context = SimpleNamespace(context=SimpleNamespace())
+
+    telemetry_hooks._wrap_agent_tools([agent])
+
+    result = asyncio.run(tool.on_invoke_tool(context, '{"label":"private"}'))
+
+    assert result.startswith("An error occurred")
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+    assert telemetry_events[0]["properties"]["status"] == "error"
+    assert telemetry_events[0]["properties"]["tool_name"] == "TelemetryRaiseError"
+    assert telemetry_events[1]["properties"]["error_type"] == "ToolReturnedError"
+    assert "private" not in str(telemetry_events)
+
+
+def test_tool_invocation_wrapper_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+    calls = 0
+
+    async def invoke_tool(context, args_json):
+        nonlocal calls
+        calls += 1
+        raise ValueError("private")
+
+    tool = SimpleNamespace(name="InsertNewSlides", on_invoke_tool=invoke_tool)
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2", tools=[tool])
+
+    telemetry_hooks._wrap_agent_tools([agent])
+    telemetry_hooks._wrap_agent_tools([agent])
+
+    with pytest.raises(ValueError):
+        asyncio.run(tool.on_invoke_tool(SimpleNamespace(context=SimpleNamespace()), "{}"))
+
+    assert calls == 1
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+
+
+def test_tool_failure_wrapper_suppresses_duplicate_on_tool_end_error(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+
+    async def invoke_tool(context, args_json):
+        raise RuntimeError("private")
+
+    tool = SimpleNamespace(name="InsertNewSlides", on_invoke_tool=invoke_tool)
+    agent = SimpleNamespace(name="Slides Agent", model="gpt-5.2", tools=[tool])
+    context = SimpleNamespace(context=SimpleNamespace())
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+
+    telemetry_hooks._wrap_agent_tools([agent])
+
+    async def run_tool_and_hook() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        with pytest.raises(RuntimeError):
+            await tool.on_invoke_tool(context, "{}")
+        await hooks.on_tool_end(context, agent, tool, "Error: private")
+
+    asyncio.run(run_tool_and_hook())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
+
+
+def test_tool_returned_error_wrapper_suppresses_duplicate_on_tool_end_error(
+    monkeypatch: pytest.MonkeyPatch,
+    telemetry_events: list[dict],
+) -> None:
+    monkeypatch.setenv("POSTHOG_API_KEY", "ph_env")
+
+    async def invoke_tool(context, args_json):
+        return "An error occurred while running the tool. Please try again. Error: private"
+
+    tool = SimpleNamespace(name="TelemetryRaiseError", on_invoke_tool=invoke_tool)
+    agent = SimpleNamespace(name="General Agent", model="gpt-5.2", tools=[tool])
+    context = SimpleNamespace(context=SimpleNamespace())
+    hooks = telemetry_hooks.OpenSwarmTelemetryAgentHooks()
+
+    telemetry_hooks._wrap_agent_tools([agent])
+
+    async def run_tool_and_hook() -> None:
+        await hooks.on_tool_start(context, agent, tool)
+        result = await tool.on_invoke_tool(context, "{}")
+        await hooks.on_tool_end(context, agent, tool, result)
+
+    asyncio.run(run_tool_and_hook())
+
+    assert [entry["event"] for entry in telemetry_events] == ["tool_invoked", "error"]
