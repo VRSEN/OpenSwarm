@@ -1,5 +1,6 @@
 agency-swarm[fastapi,jupyter,litellm]>=1.9.7
 questionary>=2.0.0
+posthog>=7,<8
 fastapi
 uvicorn
 composio==0.8.0

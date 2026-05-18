@@ -2,6 +2,7 @@ node_modules/
 mnt/
 .bun-cache/
 .playwright-browsers/
+openswarm_telemetry_config.py
 
 # TUI binaries — downloaded automatically on first run from GitHub Releases
 agency-windows-x64.exe

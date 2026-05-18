@@ -6,6 +6,7 @@ Auto-launched:  python run.py  (when no provider key is found)
 """
 
 import getpass
+import os
 import sys
 from pathlib import Path
 
@@ -290,6 +291,21 @@ def run_onboarding() -> None:
 
     # ── write .env ────────────────────────────────────────────────────────────
     _write_env(updates)
+    for key, value in updates.items():
+        if value:
+            os.environ[key] = value
+
+    try:
+        import telemetry
+
+        if updates.get(provider["env_key"]):
+            telemetry.capture_provider_configured(provider=provider["name"])
+        for addon in selected_addons:
+            if any(updates.get(key_spec["env"]) for key_spec in addon["keys"]):
+                telemetry.capture_provider_configured(provider=addon["id"])
+        telemetry.capture_onboarding_completed(provider=provider["name"])
+    except Exception:
+        pass
 
     # ── summary ───────────────────────────────────────────────────────────────
     console.print()

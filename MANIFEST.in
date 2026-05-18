@@ -1,0 +1,3 @@
+exclude openswarm_telemetry_config.py
+prune build
+prune dist

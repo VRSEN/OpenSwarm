@@ -13,6 +13,8 @@ apply_dual_comms_patch()
 apply_file_attachment_reference_patch()
 apply_ipython_composio_context_patch()
 
+_telemetry_app_started = False
+
 _tracing_key = os.getenv("OPENAI_API_KEY")
 if _tracing_key:
     set_tracing_export_api_key(_tracing_key)
@@ -20,9 +22,23 @@ else:
     set_tracing_disabled(True)
 
 
+def _capture_app_started_once():
+    global _telemetry_app_started
+    if _telemetry_app_started:
+        return
+    _telemetry_app_started = True
+    try:
+        import telemetry
+
+        telemetry.capture_app_started()
+    except Exception:
+        pass
+
+
 def create_agency(load_threads_callback=None):
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage
+    from telemetry_hooks import instrument_agency
 
     from orchestrator import create_orchestrator
     from virtual_assistant import create_virtual_assistant
@@ -74,7 +90,8 @@ def create_agency(load_threads_callback=None):
         load_threads_callback=load_threads_callback,
     )
 
-    return agency
+    _capture_app_started_once()
+    return instrument_agency(agency)
 
 if __name__ == "__main__":
     agency = create_agency()

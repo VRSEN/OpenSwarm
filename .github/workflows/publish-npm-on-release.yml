@@ -92,5 +92,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Clean Python build artifacts
+        shell: bash
+        run: rm -rf build dist *.egg-info
+
+      - name: Validate no stale telemetry config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f openswarm_telemetry_config.py ]]; then
+            echo "openswarm_telemetry_config.py exists before npm CI injection; remove it before publishing." >&2
+            exit 1
+          fi
+          python3 scripts/check_telemetry_artifact.py build dist
+
+      - name: Validate telemetry secrets
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${POSTHOG_API_KEY}" ]]; then
+            echo "POSTHOG_API_KEY GitHub secret is required before publishing the npm artifact." >&2
+            exit 1
+          fi
+
+      - name: Generate npm telemetry config
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+        run: python3 scripts/write_telemetry_config.py
+
       - name: Publish npm package
         run: npm publish --access public --tag "$NPM_TAG"
