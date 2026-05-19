@@ -151,15 +151,25 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one InsertNewSlides call.
 
     Model priority:
+    0. OPENAI_BASE_URL set (local router) → use the agency's DEFAULT_MODEL
+       so the call is routed through the router (subscription auth) instead
+       of hitting the hardcoded gpt-5.3-codex / api.openai.com that the
+       router does not expose by that bare id.
     1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best planning quality)
     2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
     3. AsyncOpenAI() default (env vars)
 
     Returns (agent, is_codex).
     """
+    router_mode = bool(os.getenv("OPENAI_BASE_URL"))
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     is_codex = False
-    if anthropic_key:
+    if router_mode:
+        from config import get_default_model
+        # get_default_model already returns a router-bound
+        # OpenAIChatCompletionsModel instance in router mode.
+        model = get_default_model()
+    elif anthropic_key:
         model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
         from agents import OpenAIResponsesModel
@@ -190,8 +200,8 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
         model=model,
         output_type=_PlanResponse,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity=None if is_codex else "medium",
+            reasoning=None if router_mode else Reasoning(effort="high", summary="auto"),
+            verbosity=None if (is_codex or router_mode) else "medium",
             store=False if is_codex else None,
         ),
     )

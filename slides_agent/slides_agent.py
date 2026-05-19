@@ -6,7 +6,7 @@ from pathlib import Path
 from virtual_assistant.tools.ReadFile import ReadFile
 from shared_tools.CopyFile import CopyFile
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, filter_hosted_tools
 
 # Import slide tools
 from .tools import (
@@ -57,7 +57,7 @@ def create_slides_agent() -> Agent:
         instructions=_build_instructions(),
         # files_folder=os.path.join(current_dir, "files"),
         # tools_folder=os.path.join(current_dir, "tools"),
-        tools=[
+        tools=filter_hosted_tools([
             # Slide creation and management: InsertNewSlides then ModifySlide
             InsertNewSlides,
             ModifySlide,
@@ -87,7 +87,7 @@ def create_slides_agent() -> Agent:
             CopyFile,
             ReadFile,
             WebSearchTool(search_context_size="high"),
-        ],
+        ]),
         model=get_default_model(),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto") if is_openai_provider() else None,

@@ -296,15 +296,23 @@ def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one ModifySlide call.
 
     Model priority:
+    0. OPENAI_BASE_URL set (local router) → use the agency's DEFAULT_MODEL
+       so the call is routed through the router (subscription auth).
     1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best HTML quality)
     2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
     3. AsyncOpenAI() default (env vars)
 
     Returns (agent, is_codex).
     """
+    router_mode = bool(os.getenv("OPENAI_BASE_URL"))
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     is_codex = False
-    if anthropic_key:
+    if router_mode:
+        from config import get_default_model
+        # get_default_model already returns a router-bound
+        # OpenAIChatCompletionsModel instance in router mode.
+        model = get_default_model()
+    elif anthropic_key:
         model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
         from agents import OpenAIResponsesModel
@@ -326,8 +334,8 @@ def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
         tools=[],
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity="medium",
+            reasoning=None if router_mode else Reasoning(effort="high", summary="auto"),
+            verbosity=None if router_mode else "medium",
             store=False if is_codex else None,
         ),
     )

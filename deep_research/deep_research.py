@@ -3,7 +3,7 @@ from agency_swarm.tools import WebSearchTool, IPythonInterpreter
 from openai.types.shared import Reasoning
 from virtual_assistant.tools.ScholarSearch import ScholarSearch
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, filter_hosted_tools
 
 
 def create_deep_research() -> Agent:
@@ -12,7 +12,7 @@ def create_deep_research() -> Agent:
         description="Comprehensive deep research agent that conducts thorough research on any topic.",
         instructions="./instructions.md",
         files_folder="./files",
-        tools=[WebSearchTool(), ScholarSearch, IPythonInterpreter],
+        tools=filter_hosted_tools([WebSearchTool(), ScholarSearch, IPythonInterpreter]),
         model=get_default_model(),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto") if is_openai_provider() else None,

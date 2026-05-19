@@ -9,7 +9,7 @@ from agency_swarm.tools import (
 )
 from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, filter_hosted_tools
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 instructions_path = os.path.join(current_dir, "instructions.md")
@@ -21,7 +21,7 @@ def create_data_analyst() -> Agent:
         instructions=instructions_path,
         tools_folder=os.path.join(current_dir, "tools"),
         model=get_default_model(),
-        tools=[
+        tools=filter_hosted_tools([
             WebSearchTool(),
             PersistentShellTool,
             IPythonInterpreter,
@@ -31,7 +31,7 @@ def create_data_analyst() -> Agent:
             FindTools,
             ManageConnections,
             SearchTools,
-        ],
+        ]),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
             truncation="auto",
