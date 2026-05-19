@@ -11,6 +11,31 @@ const path = require('path')
 const scriptPath = fs.realpathSync(__filename)
 const packageDir = path.dirname(path.dirname(scriptPath))
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
+const productTuiLogoLeft = [
+  ' ██████╗ ██████╗ ███████╗███╗   ██╗',
+  '██╔═══██╗██╔══██╗██╔════╝████╗  ██║',
+  '██║   ██║██████╔╝█████╗  ██╔██╗ ██║',
+  '██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║',
+  '╚██████╔╝██║     ███████╗██║ ╚████║',
+  ' ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝',
+]
+const productTuiLogoRight = [
+  '',
+  '███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗',
+  '██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║',
+  '███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║',
+  '╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║',
+  '███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║',
+  '╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝',
+]
+const productWordmarkLines = [
+  ' ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗',
+  '██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║',
+  '██║   ██║██████╔╝█████╗  ██╔██╗ ██║███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║',
+  '██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║',
+  '╚██████╔╝██║     ███████╗██║ ╚████║███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║',
+  ' ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝',
+]
 const downstreamEnv = {
   AGENTSWARM_PRODUCT_DISPLAY_NAME: 'OpenSwarm',
   AGENTSWARM_PRODUCT_COMMAND: 'openswarm',
@@ -23,6 +48,11 @@ const downstreamEnv = {
   AGENTSWARM_PRODUCT_STARTER_REPO: 'VRSEN/OpenSwarm',
   AGENTSWARM_PRODUCT_STARTER_FOLDER: 'openswarm',
   AGENTSWARM_PRODUCT_ENTRY_FILES: 'swarm.py,agency.py',
+  AGENTSWARM_PRODUCT_LOCK_MODEL_SELECTION: 'true',
+  AGENTSWARM_PRODUCT_ADDONS_SETUP_FLAG_ENV: 'OPENSWARM_ONBOARD_FLAG',
+  AGENTSWARM_PRODUCT_TUI_LOGO_LEFT: JSON.stringify(productTuiLogoLeft),
+  AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: JSON.stringify(productTuiLogoRight),
+  AGENTSWARM_PRODUCT_WORDMARK_LINES: JSON.stringify(productWordmarkLines),
   AGENTSWARM_PRODUCT_VERSION: packageJson.version,
 }
 
