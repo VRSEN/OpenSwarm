@@ -35,7 +35,8 @@ class CreateDocument(BaseTool):
     - .source.html file (the canonical source of truth)
 
     Markdown workflow creates:
-    - .md file only (no .docx or .pdf generation)
+    - .md file
+    - .source.html file (generated from Markdown to enable PDF/DOCX conversion)
     
     HTML is used as the source format because it provides:
     - Full styling control (fonts, colors, spacing, etc.)
@@ -141,10 +142,25 @@ Note: The .source.html file is the canonical source to be used for document conv
 
     def _create_markdown(self, doc_name, project_dir, markdown_value):
         md_path = project_dir / f"{doc_name}.md"
-        if md_path.exists() and not self.overwrite:
-            return f"Error: Document '{doc_name}' already exists in project '{self.project_name}'. Use overwrite=True to replace it, or choose a different document name."
+        source_path = project_dir / f"{doc_name}.source.html"
+        
+        # Guard: Respect overwrite flag for BOTH files
+        if not self.overwrite:
+            if md_path.exists():
+                return f"Error: Markdown file '{md_path.name}' already exists in project '{self.project_name}'. Use overwrite=True to replace it."
+            if source_path.exists():
+                return f"Error: HTML source '{source_path.name}' already exists in project '{self.project_name}'. Creating this Markdown document would overwrite it. Use overwrite=True to proceed."
 
         md_path.write_text(markdown_value, encoding="utf-8")
+        
+        # Also create a .source.html version from Markdown to enable PDF/DOCX conversion
+        from markdown_it import MarkdownIt
+        md_parser = MarkdownIt()
+        html_body = md_parser.render(markdown_value)
+        html_full = f"<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{html_body}</body></html>"
+        
+        source_path.write_text(_ensure_ua_reset(html_full), encoding='utf-8')
+
         if not md_path.exists():
             return f"Error: Markdown generation failed for document '{doc_name}'."
         md_size = md_path.stat().st_size
@@ -157,10 +173,11 @@ Document: {doc_name}
 
 Files created:
   - {md_path.name} ({md_size:,} bytes) [Markdown source]
+  - {source_path.name} [HTML source for conversion]
 
 Path: {md_path}
 
-Note: Markdown workflow only creates a .md file and does not generate .docx or .pdf files."""
+Note: You can now convert this document to PDF or DOCX using the ConvertDocument tool."""
 
 def _build_html_preview_image(html_content: str, base_dir: Path):
     """Render a preview JPEG of the HTML document.

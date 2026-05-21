@@ -8,7 +8,14 @@ from openai.types.shared import Reasoning
 from dotenv import load_dotenv
 
 from config import get_default_model, is_openai_provider
-from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
+from shared_tools import (
+    CopyFile,
+    DeepReadFile,
+    ExecuteTool,
+    FindTools,
+    ManageConnections,
+    SearchTools,
+)
 
 load_dotenv()
 
@@ -33,6 +40,7 @@ def create_virtual_assistant() -> Agent:
             PersistentShellTool,
             IPythonInterpreter,
             CopyFile,
+            DeepReadFile,
             ExecuteTool,
             FindTools,
             ManageConnections,
