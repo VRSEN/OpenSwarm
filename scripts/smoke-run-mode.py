@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import pathlib
+import platform
 import pty
 import re
 import select
@@ -48,7 +49,71 @@ def latest_pack_stdout_line(stdout: str) -> str:
     raise RuntimeError("npm pack did not print a tarball name")
 
 
-def install_package(repo: pathlib.Path, root: pathlib.Path, source: str, npm_spec: str, env: dict[str, str]) -> pathlib.Path:
+def resolve_local_package(value: str) -> pathlib.Path:
+    package = pathlib.Path(value).expanduser()
+    if not package.is_absolute():
+        package = pathlib.Path.cwd() / package
+    package = package.resolve()
+    if not package.exists():
+        raise RuntimeError(f"local AgentSwarm package does not exist at {package}")
+    return package
+
+
+def resolve_models_fixture(package: pathlib.Path | None) -> pathlib.Path | None:
+    if not package or not package.is_dir():
+        return None
+    fixture = package / "test" / "tool" / "fixtures" / "models-api.json"
+    return fixture if fixture.exists() else None
+
+
+def resolve_local_binary(value: str) -> pathlib.Path:
+    binary = pathlib.Path(value).expanduser()
+    if not binary.is_absolute():
+        binary = pathlib.Path.cwd() / binary
+    binary = binary.resolve()
+    if not binary.exists():
+        raise RuntimeError(f"local OpenSwarm TUI binary does not exist at {binary}")
+    if not binary.is_file():
+        raise RuntimeError(f"local OpenSwarm TUI binary is not a file at {binary}")
+    return binary
+
+
+def platform_asset_name() -> str:
+    machine = platform.machine().lower()
+    if machine in {"arm64", "aarch64"}:
+        arch = "arm64"
+    elif machine in {"x86_64", "amd64"}:
+        arch = "x64"
+    else:
+        arch = None
+
+    if sys.platform == "darwin" and arch:
+        return f"agentswarm-darwin-{arch}"
+    if sys.platform.startswith("linux") and arch == "x64":
+        return "agentswarm-linux-x64"
+    if sys.platform == "win32" and arch == "x64":
+        return "agentswarm-windows-x64.exe"
+    raise RuntimeError(
+        f"unsupported OpenSwarm TUI asset platform: {sys.platform} {platform.machine()}"
+    )
+
+
+def install_openswarm_tui_binary(package_dir: pathlib.Path, binary: pathlib.Path) -> pathlib.Path:
+    target = package_dir / platform_asset_name()
+    shutil.copy2(binary, target)
+    if os.name != "nt":
+        target.chmod(target.stat().st_mode | 0o111)
+    return target
+
+
+def install_package(
+    repo: pathlib.Path,
+    root: pathlib.Path,
+    source: str,
+    npm_spec: str,
+    agentswarm_path: pathlib.Path | None,
+    env: dict[str, str],
+) -> pathlib.Path:
     run(["npm", "init", "-y"], cwd=root, env=env)
     if source == "local":
         packed = run(["npm", "pack"], cwd=repo, env=env)
@@ -59,6 +124,9 @@ def install_package(repo: pathlib.Path, root: pathlib.Path, source: str, npm_spe
             tarball.unlink(missing_ok=True)
     else:
         run(["npm", "install", npm_spec], cwd=root, env=env)
+
+    if agentswarm_path:
+        run(["npm", "install", str(agentswarm_path)], cwd=root, env=env)
 
     launcher = root / "node_modules" / ".bin" / "openswarm"
     if not launcher.exists():
@@ -162,6 +230,11 @@ def run_tui_smoke(
     sent_agents_command = False
     verified_agents = False
     closed_agents_at: float | None = None
+    sent_models_command_menu = False
+    sent_models_filter = False
+    models_menu_start = 0
+    verified_models = False
+    closed_models_at: float | None = None
     sent_prompt = False
     saw_expected = False
     deadline = time.monotonic() + timeout
@@ -206,12 +279,43 @@ def run_tui_smoke(
                 verified_agents = True
                 closed_agents_at = closed_agents_at or time.monotonic()
 
+            agents_ready = check not in {"agents", "all"} or verified_agents
+            if (
+                check in {"models", "all"}
+                and agents_ready
+                and not sent_models_command_menu
+                and run_mode_ready
+                and (closed_agents_at is None or time.monotonic() - closed_agents_at > 0.5)
+            ):
+                models_menu_start = len(plain)
+                write(master_fd, "\x10")
+                sent_models_command_menu = True
+
+            if sent_models_command_menu and not verified_models:
+                models_menu = compact(plain[models_menu_start:]).lower()
+                if "/models" in models_menu or "switchmodel" in models_menu:
+                    verified_models = True
+                    write(master_fd, "\x1b")
+                    closed_models_at = time.monotonic()
+                    if check == "models":
+                        return plain
+                elif "commands" in models_menu and not sent_models_filter:
+                    write(master_fd, "model")
+                    sent_models_filter = True
+
+            if check == "prompt":
+                verified_models = True
+                closed_models_at = closed_models_at or closed_agents_at or time.monotonic()
+
+            models_ready = check not in {"models", "all"} or verified_models
+            closed_picker_at = closed_models_at or closed_agents_at
             if (
                 check in {"prompt", "all"}
                 and verified_agents
+                and models_ready
                 and not sent_prompt
-                and closed_agents_at is not None
-                and time.monotonic() - closed_agents_at > 0.5
+                and closed_picker_at is not None
+                and time.monotonic() - closed_picker_at > 0.5
             ):
                 write(master_fd, prompt + "\r")
                 sent_prompt = True
@@ -229,7 +333,9 @@ def run_tui_smoke(
     raise RuntimeError(
         "OpenSwarm Run-mode smoke test did not reach the expected response. "
         f"sent_confirm={sent_confirm} sent_agents_command={sent_agents_command} "
-        f"verified_agents={verified_agents} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
+        f"verified_agents={verified_agents} sent_models_command_menu={sent_models_command_menu} "
+        f"sent_models_filter={sent_models_filter} "
+        f"verified_models={verified_models} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
     )
 
 
@@ -237,7 +343,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=["local", "npm"], default="local")
     parser.add_argument("--npm-spec")
-    parser.add_argument("--check", choices=["all", "agents", "prompt"], default="all")
+    parser.add_argument(
+        "--agentswarm-package",
+        help="Local @vrsen/agentswarm tarball or package directory to install after OpenSwarm for smoke proof.",
+    )
+    parser.add_argument(
+        "--openswarm-tui-binary",
+        help="Local OpenSwarm-branded AgentSwarm TUI binary to copy into the installed @vrsen/openswarm package.",
+    )
+    parser.add_argument("--check", choices=["all", "agents", "models", "prompt"], default="all")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--expect", default=DEFAULT_EXPECT)
     parser.add_argument("--timeout", type=int, default=1200)
@@ -247,6 +361,9 @@ def main() -> int:
     repo = pathlib.Path(__file__).resolve().parents[1]
     package_json = json.loads((repo / "package.json").read_text(encoding="utf-8"))
     npm_spec = args.npm_spec or f"{package_json['name']}@{package_json['version']}"
+    agentswarm_path = resolve_local_package(args.agentswarm_package) if args.agentswarm_package else None
+    openswarm_tui_binary = resolve_local_binary(args.openswarm_tui_binary) if args.openswarm_tui_binary else None
+    models_fixture = resolve_models_fixture(agentswarm_path)
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key and args.check == "prompt" and os.environ.get("GITHUB_ACTIONS") == "true":
         print("Skipped OpenSwarm live prompt smoke because OPENAI_API_KEY is not configured")
@@ -260,23 +377,32 @@ def main() -> int:
         {
             "PYTHONUTF8": "1",
             "PYTHONIOENCODING": "utf-8",
+            "CI": "1",
             "TERM": "xterm-256color",
             "OPENCODE_AUTH_CONTENT": json.dumps({"openai": {"type": "api", "key": auth_key}}),
             "XDG_DATA_HOME": str(root / "xdg-data"),
             "XDG_CONFIG_HOME": str(root / "xdg-config"),
             "XDG_CACHE_HOME": str(root / "xdg-cache"),
             "XDG_STATE_HOME": str(root / "xdg-state"),
+            "OPENCODE_DISABLE_AUTOUPDATE": "true",
+            "OPENCODE_DISABLE_MODELS_FETCH": "true",
         }
     )
+    if models_fixture:
+        env["OPENCODE_MODELS_PATH"] = str(models_fixture)
 
     try:
-        launcher = install_package(repo, root, args.source, npm_spec, env)
+        launcher = install_package(repo, root, args.source, npm_spec, agentswarm_path, env)
         package_dir = root / "node_modules" / "@vrsen" / "openswarm"
+        if openswarm_tui_binary:
+            install_openswarm_tui_binary(package_dir, openswarm_tui_binary)
         plain = run_tui_smoke(launcher, package_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
         if "Agency Swarm Default" not in plain:
             raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
         if args.check in {"agents", "all"}:
             print(f"OpenSwarm /agents smoke passed with {len(EXPECTED_SPECIALIST_AGENTS)} specialists visible")
+        if args.check in {"models", "all"}:
+            print("OpenSwarm /models smoke passed")
         if args.check in {"prompt", "all"}:
             print("OpenSwarm live prompt smoke passed")
         print(f"OpenSwarm smoke root package: {package_dir}")
