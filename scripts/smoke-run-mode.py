@@ -232,7 +232,10 @@ def run_tui_smoke(
     closed_agents_at: float | None = None
     sent_models_command_menu = False
     sent_models_filter = False
+    selected_models_command = False
+    models_filter_at: float | None = None
     models_menu_start = 0
+    models_picker_start = 0
     verified_models = False
     closed_models_at: float | None = None
     sent_prompt = False
@@ -291,17 +294,32 @@ def run_tui_smoke(
                 write(master_fd, "\x10")
                 sent_models_command_menu = True
 
-            if sent_models_command_menu and not verified_models:
+            if sent_models_command_menu and not selected_models_command:
                 models_menu = compact(plain[models_menu_start:]).lower()
-                if "/models" in models_menu or "switchmodel" in models_menu:
+                if "commands" in models_menu and not sent_models_filter:
+                    write(master_fd, "model")
+                    sent_models_filter = True
+                    models_filter_at = time.monotonic()
+                elif (
+                    sent_models_filter
+                    and models_filter_at is not None
+                    and time.monotonic() - models_filter_at > 0.5
+                    and ("/models" in models_menu or "switchmodel" in models_menu)
+                ):
+                    models_picker_start = len(plain)
+                    write(master_fd, "\r")
+                    selected_models_command = True
+
+            if selected_models_command and not verified_models:
+                models_picker = compact(plain[models_picker_start:]).lower()
+                if "selectmodel" in models_picker and (
+                    "agencyswarmdefault" in models_picker or "manageproviderauth" in models_picker
+                ):
                     verified_models = True
                     write(master_fd, "\x1b")
                     closed_models_at = time.monotonic()
                     if check == "models":
                         return plain
-                elif "commands" in models_menu and not sent_models_filter:
-                    write(master_fd, "model")
-                    sent_models_filter = True
 
             if check == "prompt":
                 verified_models = True
@@ -334,7 +352,7 @@ def run_tui_smoke(
         "OpenSwarm Run-mode smoke test did not reach the expected response. "
         f"sent_confirm={sent_confirm} sent_agents_command={sent_agents_command} "
         f"verified_agents={verified_agents} sent_models_command_menu={sent_models_command_menu} "
-        f"sent_models_filter={sent_models_filter} "
+        f"sent_models_filter={sent_models_filter} selected_models_command={selected_models_command} "
         f"verified_models={verified_models} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
     )
 
