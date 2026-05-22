@@ -200,10 +200,9 @@ async function ensureCustomBinary() {
     return resolved
   } catch (error) {
     fs.rmSync(binaryPath, { force: true })
-    process.stderr.write(
-      `openswarm: custom OpenSwarm TUI unavailable (${error instanceof Error ? error.message : String(error)}); falling back to packaged AgentSwarm UI.\n`,
+    throw new Error(
+      `custom OpenSwarm TUI unavailable (${error instanceof Error ? error.message : String(error)}). Reinstall @vrsen/openswarm or set OPENSWARM_TUI_URL to a valid binary.`,
     )
-    return null
   }
 }
 
