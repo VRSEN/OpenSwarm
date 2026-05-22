@@ -35,6 +35,7 @@ EXPECTED_SPECIALIST_AGENTS = [
     "Video Agent",
     "Image Agent",
 ]
+EXPECTED_AGENT_COUNT = 1 + len(EXPECTED_SPECIALIST_AGENTS)
 
 
 def run(cmd: Sequence[str], *, cwd: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -103,6 +104,20 @@ def install_openswarm_tui_binary(package_dir: pathlib.Path, binary: pathlib.Path
     shutil.copy2(binary, target)
     if os.name != "nt":
         target.chmod(target.stat().st_mode | 0o111)
+    return target
+
+
+def create_local_openswarm_project(package_dir: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
+    target = root / "openswarm"
+    ignore = shutil.ignore_patterns(
+        ".git",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+        "agentswarm-*",
+        "*.tgz",
+    )
+    shutil.copytree(package_dir, target, ignore=ignore)
     return target
 
 
@@ -204,6 +219,7 @@ def set_window_size(fd: int, rows: int = 45, columns: int = 180) -> None:
 def run_tui_smoke(
     launcher: pathlib.Path,
     package_dir: pathlib.Path,
+    launcher_cwd: pathlib.Path,
     root: pathlib.Path,
     env: dict[str, str],
     check: str,
@@ -215,7 +231,7 @@ def run_tui_smoke(
     set_window_size(slave_fd)
     process = subprocess.Popen(
         [str(launcher)],
-        cwd=package_dir,
+        cwd=launcher_cwd,
         env=env,
         stdin=slave_fd,
         stdout=slave_fd,
@@ -443,11 +459,26 @@ def main() -> int:
         package_dir = root / "node_modules" / "@vrsen" / "openswarm"
         if openswarm_tui_binary:
             install_openswarm_tui_binary(package_dir, openswarm_tui_binary)
-        plain = run_tui_smoke(launcher, package_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
+        generic_dir = root / "my-agency"
+        generic_dir.mkdir()
+        (generic_dir / "agency.py").write_text(
+            "\n".join(
+                [
+                    "from agency_swarm import Agency",
+                    "",
+                    "def create_agency(load_threads_callback=None):",
+                    "    return Agency(name='Generic Agency')",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        create_local_openswarm_project(package_dir, generic_dir)
+        plain = run_tui_smoke(launcher, package_dir, generic_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
         if "Agency Swarm Default" not in plain:
             raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
         if args.check in {"agents", "all"}:
-            print(f"OpenSwarm /agents smoke passed with {len(EXPECTED_SPECIALIST_AGENTS)} specialists visible")
+            print(f"OpenSwarm /agents smoke passed with {EXPECTED_AGENT_COUNT} agents visible")
         if args.check in {"models", "all"}:
             print("OpenSwarm /models smoke passed")
         if args.check in {"prompt", "all"}:

@@ -151,11 +151,8 @@ jobs:
           AGENTSWARM_PRODUCT_MDNS_DOMAIN: openswarm.local
           AGENTSWARM_PRODUCT_STARTER_REPO: VRSEN/OpenSwarm
           AGENTSWARM_PRODUCT_STARTER_FOLDER: openswarm
-          AGENTSWARM_PRODUCT_ENTRY_FILES: swarm.py,agency.py
+          AGENTSWARM_PRODUCT_ENTRY_FILES: swarm.py
           AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION: "true"
-          AGENTSWARM_PRODUCT_TUI_LOGO_LEFT: '[" ██████╗ ██████╗ ███████╗███╗   ██╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║","╚██████╔╝██║     ███████╗██║ ╚████║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝"]'
-          AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: '["","███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║","███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║","╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
-          AGENTSWARM_PRODUCT_WORDMARK_LINES: '[" ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║","╚██████╔╝██║     ███████╗██║ ╚████║███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
           AGENTSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
         run: bun run script/build.ts --single --skip-install
 
