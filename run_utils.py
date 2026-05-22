@@ -79,8 +79,8 @@ def _uv_env() -> dict[str, str]:
 
 # ── Bootstrap: create venv + install deps automatically on first run ─────────
 # Only stdlib imports above. _bootstrap() is called explicitly — either from
-# swarm.py (via `from run import _bootstrap; _bootstrap()`) or from the
-# __main__ guard below — never at module level, so `from run import _bootstrap`
+# swarm.py (via `from run_utils import _bootstrap; _bootstrap()`) or from the
+# __main__ guard below — never at module level, so `from run_utils import _bootstrap`
 # is safe to call from outside the venv.
 def _bootstrap() -> None:
     _repo = Path(__file__).resolve().parent

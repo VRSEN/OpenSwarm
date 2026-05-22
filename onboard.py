@@ -26,6 +26,11 @@ try:
 
     _HAS_QUESTIONARY = True
 except ImportError:
+    class Choice:
+        def __init__(self, title: object, value: object | None = None) -> None:
+            self.title = title
+            self.value = title if value is None else value
+
     _HAS_QUESTIONARY = False
 
 console = Console()

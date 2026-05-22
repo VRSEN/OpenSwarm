@@ -1,4 +1,9 @@
 import os
+
+from run_utils import _bootstrap
+
+_bootstrap()
+
 from dotenv import load_dotenv
 from agents import set_tracing_disabled, set_tracing_export_api_key
 from patches.patch_agency_swarm_dual_comms import apply_dual_comms_patch
