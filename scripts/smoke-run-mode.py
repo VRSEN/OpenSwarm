@@ -230,11 +230,17 @@ def run_tui_smoke(
     sent_agents_command = False
     verified_agents = False
     closed_agents_at: float | None = None
-    sent_models_command_menu = False
-    sent_models_filter = False
+    sent_models_slash = False
+    saw_models_slash = False
+    cleared_models_probe = False
+    sent_models_direct = False
+    saw_models_direct = False
     selected_models_command = False
-    models_filter_at: float | None = None
-    models_menu_start = 0
+    models_slash_at: float | None = None
+    models_clear_at: float | None = None
+    models_direct_at: float | None = None
+    models_slash_start = 0
+    models_direct_start = 0
     models_picker_start = 0
     verified_models = False
     closed_models_at: float | None = None
@@ -286,25 +292,46 @@ def run_tui_smoke(
             if (
                 check in {"models", "all"}
                 and agents_ready
-                and not sent_models_command_menu
+                and not sent_models_slash
                 and run_mode_ready
                 and (closed_agents_at is None or time.monotonic() - closed_agents_at > 0.5)
             ):
-                models_menu_start = len(plain)
-                write(master_fd, "\x10")
-                sent_models_command_menu = True
+                models_slash_start = len(plain)
+                write(master_fd, "/")
+                sent_models_slash = True
+                models_slash_at = time.monotonic()
 
-            if sent_models_command_menu and not selected_models_command:
-                models_menu = compact(plain[models_menu_start:]).lower()
-                if "commands" in models_menu and not sent_models_filter:
-                    write(master_fd, "model")
-                    sent_models_filter = True
-                    models_filter_at = time.monotonic()
+            if sent_models_slash and not selected_models_command:
+                models_slash = compact(plain[models_slash_start:]).lower()
+                if not saw_models_slash and "/models" in models_slash:
+                    saw_models_slash = True
+                if (
+                    saw_models_slash
+                    and not cleared_models_probe
+                    and models_slash_at is not None
+                    and time.monotonic() - models_slash_at > 0.5
+                ):
+                    write(master_fd, "\x7f")
+                    cleared_models_probe = True
+                    models_clear_at = time.monotonic()
                 elif (
-                    sent_models_filter
-                    and models_filter_at is not None
-                    and time.monotonic() - models_filter_at > 0.5
-                    and ("/models" in models_menu or "switchmodel" in models_menu)
+                    cleared_models_probe
+                    and not sent_models_direct
+                    and models_clear_at is not None
+                    and time.monotonic() - models_clear_at > 0.2
+                ):
+                    models_direct_start = len(plain)
+                    write(master_fd, "/models")
+                    sent_models_direct = True
+                    models_direct_at = time.monotonic()
+                elif sent_models_direct and not saw_models_direct:
+                    models_direct = compact(plain[models_direct_start:]).lower()
+                    if "/models" in models_direct and "switchmodel" in models_direct:
+                        saw_models_direct = True
+                elif (
+                    saw_models_direct
+                    and models_direct_at is not None
+                    and time.monotonic() - models_direct_at > 0.5
                 ):
                     models_picker_start = len(plain)
                     write(master_fd, "\r")
@@ -351,8 +378,10 @@ def run_tui_smoke(
     raise RuntimeError(
         "OpenSwarm Run-mode smoke test did not reach the expected response. "
         f"sent_confirm={sent_confirm} sent_agents_command={sent_agents_command} "
-        f"verified_agents={verified_agents} sent_models_command_menu={sent_models_command_menu} "
-        f"sent_models_filter={sent_models_filter} selected_models_command={selected_models_command} "
+        f"verified_agents={verified_agents} sent_models_slash={sent_models_slash} "
+        f"saw_models_slash={saw_models_slash} cleared_models_probe={cleared_models_probe} "
+        f"sent_models_direct={sent_models_direct} saw_models_direct={saw_models_direct} "
+        f"selected_models_command={selected_models_command} "
         f"verified_models={verified_models} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
     )
 

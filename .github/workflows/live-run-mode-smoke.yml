@@ -29,11 +29,51 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: VRSEN/agentswarm-cli
+          ref: v1.4.35
+          path: agentswarm-cli
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+      - name: Resolve OpenSwarm package version
+        id: openswarm
+        run: node -e "console.log('version=' + require('./package.json').version)" >> "$GITHUB_OUTPUT"
+      - name: Build local OpenSwarm TUI
+        shell: bash
+        working-directory: agentswarm-cli
+        env:
+          OPENCODE_CHANNEL: rc
+          AGENTSWARM_PRODUCT_DISPLAY_NAME: OpenSwarm
+          AGENTSWARM_PRODUCT_COMMAND: openswarm
+          AGENTSWARM_PRODUCT_PACKAGE_NAME: "@vrsen/openswarm"
+          AGENTSWARM_PRODUCT_LAUNCHER_PACKAGE_NAME: "@vrsen/openswarm"
+          AGENTSWARM_PRODUCT_RELEASE_REPO: VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_DOCS_URL: https://github.com/VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_ISSUE_URL: https://github.com/VRSEN/OpenSwarm/issues/new?template=bug-report.yml
+          AGENTSWARM_PRODUCT_MDNS_DOMAIN: openswarm.local
+          AGENTSWARM_PRODUCT_STARTER_REPO: VRSEN/OpenSwarm
+          AGENTSWARM_PRODUCT_STARTER_FOLDER: openswarm
+          AGENTSWARM_PRODUCT_ENTRY_FILES: swarm.py,agency.py
+          AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION: "true"
+          AGENTSWARM_PRODUCT_VERSION: ${{ steps.openswarm.outputs.version }}
+        run: |
+          bun install
+          cd packages/opencode
+          bun run script/build.ts --single --skip-install
+          binary="$(find dist -path '*/bin/agentswarm' -type f -perm -111 | head -n 1)"
+          if [ -z "$binary" ]; then
+            echo "FAILED: built agentswarm binary not found under agentswarm-cli/packages/opencode/dist" >&2
+            find dist -maxdepth 4 -type f >&2
+            exit 1
+          fi
+          echo "OPENSWARM_TUI_BINARY=$PWD/$binary" >> "$GITHUB_ENV"
       - name: Verify OpenSwarm agent roster through TUI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 scripts/smoke-run-mode.py --source local --check agents
+        run: python3 scripts/smoke-run-mode.py --source local --openswarm-tui-binary "$OPENSWARM_TUI_BINARY" --check agents
       - name: Verify live Agency Swarm Run-mode prompt
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 scripts/smoke-run-mode.py --source local --check prompt
+        run: python3 scripts/smoke-run-mode.py --source local --openswarm-tui-binary "$OPENSWARM_TUI_BINARY" --check prompt
