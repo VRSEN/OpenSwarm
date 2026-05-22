@@ -5,6 +5,30 @@ import shutil
 import tempfile
 from pathlib import Path
 
+_PRODUCT_TUI_LOGO_LEFT = (
+    '[" ██████╗ ██████╗ ███████╗███╗   ██╗",'
+    '"██╔═══██╗██╔══██╗██╔════╝████╗  ██║",'
+    '"██║   ██║██████╔╝█████╗  ██╔██╗ ██║",'
+    '"██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║",'
+    '"╚██████╔╝██║     ███████╗██║ ╚████║",'
+    '" ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝"]'
+)
+_PRODUCT_TUI_LOGO_RIGHT = (
+    '["",'
+    '"███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗",'
+    '"██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║",'
+    '"███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║",'
+    '"╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║",'
+    '"███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║",'
+    '"╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
+)
+
+
+def _configure_product_env() -> None:
+    os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_LEFT", _PRODUCT_TUI_LOGO_LEFT)
+    os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT", _PRODUCT_TUI_LOGO_RIGHT)
+
+
 def _resolve_bin_name() -> str:
     """Return the platform+arch-specific TUI binary filename."""
     import platform
@@ -237,6 +261,7 @@ def main() -> None:
 
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    _configure_product_env()
 
     if not os.getenv("AGENTSWARM_BIN"):
         _repo = Path(__file__).resolve().parent
