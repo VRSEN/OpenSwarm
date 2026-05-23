@@ -60,7 +60,7 @@ dependencies = [
 openswarm = "run_utils:main"
 
 [tool.setuptools]
-py-modules = ["agency", "swarm", "helpers", "config", "onboard", "server"]
+py-modules = ["agency", "swarm", "helpers", "config", "onboard", "server", "run_utils"]
 
 [tool.setuptools.packages.find]
 where = ["."]
