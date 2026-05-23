@@ -111,21 +111,48 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: arm64
+            baseline: false
+            asset: agentswarm-darwin-arm64
           - os: macos-15-intel
             platform: darwin
             arch: x64
+            baseline: false
+            asset: agentswarm-darwin-x64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            baseline: true
+            asset: agentswarm-darwin-x64-baseline
           - os: ubuntu-latest
             platform: linux
             arch: x64
+            baseline: false
+            asset: agentswarm-linux-x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            baseline: true
+            asset: agentswarm-linux-x64-baseline
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            baseline: false
+            asset: agentswarm-linux-arm64
           - os: windows-latest
             platform: windows
             arch: x64
+            baseline: false
+            asset: agentswarm-windows-x64.exe
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            baseline: true
+            asset: agentswarm-windows-x64-baseline.exe
           - os: windows-11-arm
             platform: windows
             arch: arm64
+            baseline: false
+            asset: agentswarm-windows-arm64.exe
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -163,26 +190,26 @@ jobs:
           AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: '["","███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║","███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║","╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
           AGENTSWARM_PRODUCT_WORDMARK_LINES: '[""," ██████╗ ██████╗ ███████╗███╗   ██╗ ███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║ ██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║ ███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║ ╚════██║██║███╗██║██╔══██╗██╔══██╗██║╚██╔╝██║","╚██████╔╝██║     ███████╗██║ ╚████║ ███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
           AGENTSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
-        run: bun run script/build.ts --single --skip-install
+        run: bun run script/build.ts --single --skip-install ${{ matrix.baseline && '--baseline' || '' }}
 
       - name: Rename binary (Unix)
         if: matrix.platform != 'windows'
         run: |
-          mv agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm \
-             agentswarm-${{ matrix.platform }}-${{ matrix.arch }}
+          mv agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.baseline && '-baseline' || '' }}/bin/agentswarm \
+             ${{ matrix.asset }}
 
       - name: Rename binary (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          Move-Item agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}/bin/agentswarm.exe `
-            agentswarm-${{ matrix.platform }}-${{ matrix.arch }}.exe
+          Move-Item agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.baseline && '-baseline' || '' }}/bin/agentswarm.exe `
+            ${{ matrix.asset }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agentswarm-${{ matrix.platform }}-${{ matrix.arch }}
-          path: agentswarm-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'windows' && '.exe' || '' }}
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
           if-no-files-found: error
 
   release:
@@ -295,10 +322,13 @@ jobs:
           required_assets=(
             agentswarm-darwin-arm64
             agentswarm-darwin-x64
+            agentswarm-darwin-x64-baseline
             agentswarm-linux-arm64
             agentswarm-linux-x64
+            agentswarm-linux-x64-baseline
             agentswarm-windows-arm64.exe
             agentswarm-windows-x64.exe
+            agentswarm-windows-x64-baseline.exe
           )
 
           for required in "${required_assets[@]}"; do

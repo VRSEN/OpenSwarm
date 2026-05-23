@@ -66,8 +66,15 @@ function resolveAgentswarm(startDir) {
   }
 }
 
-function getBinaryName() {
-  return process.platform === 'win32' ? `agentswarm-windows-${os.arch() === 'arm64' ? 'arm64' : 'x64'}.exe` : `agentswarm-${process.platform === 'darwin' ? 'darwin' : 'linux'}-${os.arch() === 'arm64' ? 'arm64' : 'x64'}`
+function getBinaryNames() {
+  const arch = os.arch() === 'arm64' ? 'arm64' : 'x64'
+  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux'
+  const extension = process.platform === 'win32' ? '.exe' : ''
+  const names = [`agentswarm-${platform}-${arch}${extension}`]
+  if (arch === 'x64') {
+    names.push(`agentswarm-${platform}-${arch}-baseline${extension}`)
+  }
+  return names
 }
 
 function getDownloadUrl(binaryName) {
@@ -175,29 +182,31 @@ async function download(url, destination) {
 }
 
 async function ensureCustomBinary() {
-  const binaryName = getBinaryName()
-  const binaryPath = path.join(packageDir, binaryName)
-  const existing = resolveCustomBinary(binaryPath)
-  if (existing) return existing
+  const binaryNames = getBinaryNames()
+  for (const binaryName of binaryNames) {
+    const existing = resolveCustomBinary(path.join(packageDir, binaryName))
+    if (existing) return existing
+  }
 
-  fs.rmSync(binaryPath, { force: true })
-
-  const url = getDownloadUrl(binaryName)
   process.stdout.write('Downloading OpenSwarm TUI...\n')
-  try {
-    await download(url, binaryPath)
-    const resolved = resolveCustomBinary(binaryPath)
-    if (!resolved) {
+  const errors = []
+  for (const binaryName of binaryNames) {
+    const binaryPath = path.join(packageDir, binaryName)
+    fs.rmSync(binaryPath, { force: true })
+    try {
+      await download(getDownloadUrl(binaryName), binaryPath)
+      const resolved = resolveCustomBinary(binaryPath)
+      if (resolved) return resolved
       fs.rmSync(binaryPath, { force: true })
       throw new Error('Downloaded custom TUI binary failed validation')
+    } catch (error) {
+      fs.rmSync(binaryPath, { force: true })
+      errors.push(`${binaryName}: ${error instanceof Error ? error.message : String(error)}`)
     }
-    return resolved
-  } catch (error) {
-    fs.rmSync(binaryPath, { force: true })
-    throw new Error(
-      `custom OpenSwarm TUI unavailable (${error instanceof Error ? error.message : String(error)}). Reinstall @vrsen/openswarm or set OPENSWARM_TUI_URL to a valid binary.`,
-    )
   }
+  throw new Error(
+    `custom OpenSwarm TUI unavailable (${errors.join('; ')}). Reinstall @vrsen/openswarm or set OPENSWARM_TUI_URL to a valid binary.`,
+  )
 }
 
 const agentswarmBin = resolveAgentswarm(packageDir)
