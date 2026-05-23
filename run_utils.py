@@ -35,6 +35,7 @@ _PRODUCT_WORDMARK_LINES = (
 
 
 def _configure_product_env() -> None:
+    os.environ.setdefault("AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION", "true")
     os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_LEFT", _PRODUCT_TUI_LOGO_LEFT)
     os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT", _PRODUCT_TUI_LOGO_RIGHT)
     os.environ.setdefault("AGENTSWARM_PRODUCT_WORDMARK_LINES", _PRODUCT_WORDMARK_LINES)
