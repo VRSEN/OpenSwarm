@@ -90,10 +90,10 @@ def platform_asset_name() -> str:
 
     if sys.platform == "darwin" and arch:
         return f"agentswarm-darwin-{arch}"
-    if sys.platform.startswith("linux") and arch == "x64":
-        return "agentswarm-linux-x64"
-    if sys.platform == "win32" and arch == "x64":
-        return "agentswarm-windows-x64.exe"
+    if sys.platform.startswith("linux") and arch:
+        return f"agentswarm-linux-{arch}"
+    if sys.platform == "win32" and arch:
+        return f"agentswarm-windows-{arch}.exe"
     raise RuntimeError(
         f"unsupported OpenSwarm TUI asset platform: {sys.platform} {platform.machine()}"
     )

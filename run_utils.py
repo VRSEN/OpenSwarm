@@ -190,6 +190,8 @@ def _bootstrap() -> None:
             print("\nDone.\n")
         except Exception:
             print("Warning: Could not download OpenSwarm TUI. The terminal UI will use the default.\n")
+    if _bin_path.exists():
+        os.environ.setdefault("AGENTSWARM_BIN", str(_bin_path))
 # ─────────────────────────────────────────────────────────────────────────────
 
 
