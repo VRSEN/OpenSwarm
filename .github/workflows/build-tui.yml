@@ -117,9 +117,15 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - os: windows-latest
             platform: windows
             arch: x64
+          - os: windows-11-arm
+            platform: windows
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
     steps:
