@@ -295,7 +295,9 @@ jobs:
           required_assets=(
             agentswarm-darwin-arm64
             agentswarm-darwin-x64
+            agentswarm-linux-arm64
             agentswarm-linux-x64
+            agentswarm-windows-arm64.exe
             agentswarm-windows-x64.exe
           )
 
