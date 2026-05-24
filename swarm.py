@@ -1,70 +1,50 @@
 import os
-from pathlib import Path
+
+from run_utils import _bootstrap, _preload_agentswarm_bin
+
+_RUNTIME_CONFIGURED = False
 
 
-def _preload_agentswarm_bin() -> None:
-    # Bootstrap may install python-dotenv, so preserve this one override with stdlib.
-    if "AGENTSWARM_BIN" in os.environ:
+def _configure_runtime() -> None:
+    global _RUNTIME_CONFIGURED
+    if _RUNTIME_CONFIGURED:
         return
 
-    try:
-        lines = (
-            (Path(__file__).resolve().parent / ".env")
-            .read_text(encoding="utf-8")
-            .splitlines()
-        )
-    except OSError:
-        return
+    from dotenv import load_dotenv
+    from agents import set_tracing_disabled, set_tracing_export_api_key
+    from patches.patch_agency_swarm_dual_comms import apply_dual_comms_patch
+    from patches.patch_file_attachment_refs import apply_file_attachment_reference_patch
+    from patches.patch_ipython_interpreter_composio import (
+        apply_ipython_composio_context_patch,
+    )
+    from patches.patch_utf8_file_reads import apply_utf8_file_read_patch
 
-    for line in lines:
-        value = line.strip()
-        if not value or value.startswith("#"):
-            continue
-        if value.startswith("export "):
-            value = value.removeprefix("export ").lstrip()
+    load_dotenv()
 
-        key, sep, raw = value.partition("=")
-        if sep != "=" or key.strip() != "AGENTSWARM_BIN":
-            continue
+    apply_utf8_file_read_patch()
+    apply_dual_comms_patch()
+    apply_file_attachment_reference_patch()
+    apply_ipython_composio_context_patch()
 
-        raw = raw.strip()
-        if raw[:1] in {"'", '"'}:
-            quote = raw[0]
-            end = raw.find(quote, 1)
-            raw = raw[1:end] if end != -1 else raw[1:]
-        else:
-            raw = raw.split(" #", 1)[0].strip()
-        os.environ["AGENTSWARM_BIN"] = raw
-        return
+    _tracing_key = os.getenv("OPENAI_API_KEY")
+    if _tracing_key:
+        set_tracing_export_api_key(_tracing_key)
+    else:
+        set_tracing_disabled(True)
+
+    _RUNTIME_CONFIGURED = True
 
 
-from run_utils import _bootstrap
+if __name__ == "__main__":
+    _preload_agentswarm_bin()
+    _bootstrap()
 
-_preload_agentswarm_bin()
-_bootstrap()
-
-from dotenv import load_dotenv
-from agents import set_tracing_disabled, set_tracing_export_api_key
-from patches.patch_agency_swarm_dual_comms import apply_dual_comms_patch
-from patches.patch_file_attachment_refs import apply_file_attachment_reference_patch
-from patches.patch_ipython_interpreter_composio import apply_ipython_composio_context_patch
-from patches.patch_utf8_file_reads import apply_utf8_file_read_patch
-
-load_dotenv()
-
-apply_utf8_file_read_patch()
-apply_dual_comms_patch()
-apply_file_attachment_reference_patch()
-apply_ipython_composio_context_patch()
-
-_tracing_key = os.getenv("OPENAI_API_KEY")
-if _tracing_key:
-    set_tracing_export_api_key(_tracing_key)
-else:
-    set_tracing_disabled(True)
+_configure_runtime()
 
 
 def create_agency(load_threads_callback=None):
+    _configure_runtime()
+
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage
 
@@ -120,6 +100,11 @@ def create_agency(load_threads_callback=None):
 
     return agency
 
-if __name__ == "__main__":
+
+def _main() -> None:
     agency = create_agency()
     agency.tui(show_reasoning=True, reload=False)
+
+
+if __name__ == "__main__":
+    _main()

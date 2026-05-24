@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused smoke checks for OpenSwarm launch bootstrap and onboarding writes."""
+"""Focused smoke checks for OpenSwarm import bootstrap and onboarding writes."""
 
 from __future__ import annotations
 
@@ -40,12 +40,16 @@ def module(name: str, **attrs: object) -> types.ModuleType:
     return mod
 
 
-def smoke_swarm_bootstrap_order() -> None:
+def smoke_swarm_import_skips_bootstrap() -> None:
     order: list[str] = []
 
     patches = module("patches", __path__=[])
     replacements = {
-        "run_utils": module("run_utils", _bootstrap=lambda: order.append("bootstrap")),
+        "run_utils": module(
+            "run_utils",
+            _bootstrap=lambda: order.append("bootstrap"),
+            _preload_agentswarm_bin=lambda: order.append("preload"),
+        ),
         "dotenv": module("dotenv", load_dotenv=lambda: order.append("dotenv")),
         "agents": module(
             "agents",
@@ -85,10 +89,10 @@ def smoke_swarm_bootstrap_order() -> None:
             os.environ["OPENAI_API_KEY"] = old_key
         sys.modules.pop("swarm_bootstrap_smoke", None)
 
-    if not order or order[0] != "bootstrap":
-        raise RuntimeError(
-            f"swarm.py did not run bootstrap before third-party imports: {order}"
-        )
+    if "bootstrap" in order:
+        raise RuntimeError(f"swarm.py ran bootstrap during import: {order}")
+    if not order or order[0] != "dotenv":
+        raise RuntimeError(f"swarm.py did not configure runtime during import: {order}")
 
 
 def smoke_onboard_env_writes() -> None:
@@ -141,9 +145,9 @@ def smoke_onboard_env_writes() -> None:
 
 
 def main() -> int:
-    smoke_swarm_bootstrap_order()
+    smoke_swarm_import_skips_bootstrap()
     smoke_onboard_env_writes()
-    print("OpenSwarm bootstrap and onboarding smoke passed")
+    print("OpenSwarm import bootstrap and onboarding smoke passed")
     return 0
 
 

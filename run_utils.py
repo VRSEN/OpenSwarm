@@ -41,6 +41,48 @@ def _configure_product_env() -> None:
     os.environ.setdefault("AGENTSWARM_PRODUCT_WORDMARK_LINES", _PRODUCT_WORDMARK_LINES)
 
 
+def _preload_agentswarm_bin(repo: Path | None = None) -> None:
+    # Bootstrap may install python-dotenv, so preserve this one override with stdlib.
+    if "AGENTSWARM_BIN" in os.environ:
+        return
+
+    roots = [repo] if repo else [Path.cwd(), Path(__file__).resolve().parent]
+    seen: set[Path] = set()
+
+    for root in roots:
+        if root is None:
+            continue
+        path = root.resolve() / ".env"
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+
+        for line in lines:
+            value = line.strip()
+            if not value or value.startswith("#"):
+                continue
+            if value.startswith("export "):
+                value = value.removeprefix("export ").lstrip()
+
+            key, sep, raw = value.partition("=")
+            if sep != "=" or key.strip() != "AGENTSWARM_BIN":
+                continue
+
+            raw = raw.strip()
+            if raw[:1] in {"'", '"'}:
+                quote = raw[0]
+                end = raw.find(quote, 1)
+                raw = raw[1:end] if end != -1 else raw[1:]
+            else:
+                raw = raw.split(" #", 1)[0].strip()
+            os.environ["AGENTSWARM_BIN"] = raw
+            return
+
+
 def _resolve_bin_name() -> str:
     """Return the platform+arch-specific TUI binary filename."""
     import platform
@@ -317,6 +359,9 @@ def _configure_demo_console() -> None:
 
 
 def main() -> None:
+    _preload_agentswarm_bin()
+    _bootstrap()
+
     from dotenv import load_dotenv
     load_dotenv()
 
@@ -389,5 +434,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    _bootstrap()
     main()
