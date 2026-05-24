@@ -99,10 +99,10 @@ function load(opts) {
 
   const source = fs.readFileSync(launcher, 'utf8')
   const start = source.startsWith('#!') ? source.indexOf('\n') + 1 : 0
-  const main = source.lastIndexOf('\nmain().catch')
-  assert.notEqual(main, -1, 'launcher main call not found')
+  const startup = source.indexOf('\nconst agentswarmBin = resolveAgentswarm(packageDir)')
+  assert.notEqual(startup, -1, 'launcher startup block not found')
   const script = new vm.Script(
-    `${source.slice(start, main)}
+    `${source.slice(start, startup)}
 module.exports = { getBinaryNames, isMuslLinux, shouldUseDependencyBinary, ensureCustomBinary }`,
     { filename: launcher },
   )
