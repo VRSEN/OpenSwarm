@@ -53,6 +53,62 @@ def _resolve_bin_name() -> str:
     return f"agentswarm-linux-{arch}"
 
 
+def _resolve_bin_names() -> list[str]:
+    name = _resolve_bin_name()
+    names = [name]
+    stem, suffix = (name[:-4], ".exe") if name.endswith(".exe") else (name, "")
+    if stem.endswith("-x64"):
+        names.append(f"{stem}-baseline{suffix}")
+    return names
+
+
+def _is_tui_binary_runnable(path: Path) -> bool:
+    try:
+        stat = path.stat()
+        if not stat.st_size:
+            return False
+        if sys.platform != "win32" and not os.access(path, os.X_OK):
+            path.chmod(0o755)
+        result = subprocess.run(
+            [str(path), "--version"],
+            env={**os.environ, "AGENTSWARM_LAUNCHER": "0"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
+def _download_tui_binary(repo: Path, name: str) -> Path | None:
+    import urllib.request
+
+    path = repo / name
+    url = f"https://github.com/VRSEN/OpenSwarm/releases/latest/download/{name}"
+    print("Downloading OpenSwarm TUI, please wait…\n")
+    try:
+        urllib.request.urlretrieve(url, str(path))
+        if sys.platform != "win32":
+            path.chmod(0o755)
+        print("\nDone.\n")
+    except Exception:
+        path.unlink(missing_ok=True)
+        return None
+    return path
+
+
+def _resolve_tui_binary(repo: Path, download: bool) -> Path | None:
+    for name in _resolve_bin_names():
+        path = repo / name
+        if not path.exists() and download:
+            path = _download_tui_binary(repo, name) or path
+        if path.exists() and _is_tui_binary_runnable(path):
+            return path
+    return None
+
+
 def _ensure_node_playwright_browsers(repo: Path) -> None:
     """Install Node Playwright browsers where the HTML-to-PPTX runner looks for them."""
     cli = repo / "node_modules" / "playwright" / "cli.js"
@@ -177,21 +233,12 @@ def _bootstrap() -> None:
             pass
 
     # Download the OpenSwarm TUI binary from GitHub Releases if missing.
-    _bin_name = _resolve_bin_name()
-    _bin_path = _repo / _bin_name
-    if not _bin_path.exists():
-        import urllib.request
-        _bin_url = f"https://github.com/VRSEN/OpenSwarm/releases/latest/download/{_bin_name}"
-        print("Downloading OpenSwarm TUI, please wait…\n")
-        try:
-            urllib.request.urlretrieve(_bin_url, str(_bin_path))
-            if sys.platform != "win32":
-                _bin_path.chmod(0o755)
-            print("\nDone.\n")
-        except Exception:
-            print("Warning: Could not download OpenSwarm TUI. The terminal UI will use the default.\n")
-    if _bin_path.exists():
-        os.environ.setdefault("AGENTSWARM_BIN", str(_bin_path))
+    if not os.getenv("AGENTSWARM_BIN"):
+        _bin_path = _resolve_tui_binary(_repo, download=True)
+        if _bin_path:
+            os.environ["AGENTSWARM_BIN"] = str(_bin_path)
+        else:
+            print("Warning: Could not download a runnable OpenSwarm TUI. The terminal UI will use the default.\n")
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -279,8 +326,8 @@ def main() -> None:
 
     if not os.getenv("AGENTSWARM_BIN"):
         _repo = Path(__file__).resolve().parent
-        local_exe = _repo / _resolve_bin_name()
-        if local_exe.exists():
+        local_exe = _resolve_tui_binary(_repo, download=True)
+        if local_exe:
             os.environ["AGENTSWARM_BIN"] = str(local_exe)
 
     # Disable OpenAI Agents SDK tracing for terminal demo runs.
