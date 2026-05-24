@@ -78,8 +78,35 @@ function getBinaryNames() {
   return names
 }
 
+function hasExplicitTuiUrl() {
+  return Boolean(process.env.OPENSWARM_TUI_URL && process.env.OPENSWARM_TUI_URL.trim())
+}
+
+function isMuslLinux() {
+  if (process.platform !== 'linux') return false
+
+  try {
+    if (fs.existsSync('/etc/alpine-release')) return true
+  } catch {}
+
+  try {
+    const result = spawnSync('ldd', ['--version'], {
+      encoding: 'utf8',
+      timeout: 1500,
+    })
+    const output = `${result.stdout || ''}\n${result.stderr || ''}`.toLowerCase()
+    return output.includes('musl')
+  } catch {
+    return false
+  }
+}
+
+function shouldUseDependencyBinary() {
+  return isMuslLinux() && !hasExplicitTuiUrl()
+}
+
 function getDownloadUrl(binaryName) {
-  const explicit = process.env.OPENSWARM_TUI_URL && process.env.OPENSWARM_TUI_URL.trim()
+  const explicit = hasExplicitTuiUrl() ? process.env.OPENSWARM_TUI_URL.trim() : ''
   if (explicit) return explicit
   return `https://github.com/VRSEN/OpenSwarm/releases/download/v${packageJson.version}/${binaryName}`
 }
@@ -183,6 +210,8 @@ async function download(url, destination) {
 }
 
 async function ensureCustomBinary() {
+  if (shouldUseDependencyBinary()) return null
+
   const binaryNames = getBinaryNames()
   for (const binaryName of binaryNames) {
     const existing = resolveCustomBinary(path.join(packageDir, binaryName))
