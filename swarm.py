@@ -1,7 +1,46 @@
 import os
+from pathlib import Path
+
+
+def _preload_agentswarm_bin() -> None:
+    # Bootstrap may install python-dotenv, so preserve this one override with stdlib.
+    if "AGENTSWARM_BIN" in os.environ:
+        return
+
+    try:
+        lines = (
+            (Path(__file__).resolve().parent / ".env")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+    except OSError:
+        return
+
+    for line in lines:
+        value = line.strip()
+        if not value or value.startswith("#"):
+            continue
+        if value.startswith("export "):
+            value = value.removeprefix("export ").lstrip()
+
+        key, sep, raw = value.partition("=")
+        if sep != "=" or key.strip() != "AGENTSWARM_BIN":
+            continue
+
+        raw = raw.strip()
+        if raw[:1] in {"'", '"'}:
+            quote = raw[0]
+            end = raw.find(quote, 1)
+            raw = raw[1:end] if end != -1 else raw[1:]
+        else:
+            raw = raw.split(" #", 1)[0].strip()
+        os.environ["AGENTSWARM_BIN"] = raw
+        return
+
 
 from run_utils import _bootstrap
 
+_preload_agentswarm_bin()
 _bootstrap()
 
 from dotenv import load_dotenv
