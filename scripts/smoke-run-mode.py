@@ -24,6 +24,9 @@ from collections.abc import Sequence
 
 DEFAULT_PROMPT = "Reply exactly OPEN_SWARM_RUN_SMOKE_OK."
 DEFAULT_EXPECT = "OPEN_SWARM_RUN_SMOKE_OK"
+HANDOFF_PROMPT = "handoff to the data analyst"
+HANDOFF_FOLLOWUP_PROMPT = "Reply exactly OPEN_SWARM_HANDOFF_OK."
+HANDOFF_EXPECT = "OPEN_SWARM_HANDOFF_OK"
 EXPECTED_AGENCY_NAME = "OpenSwarm"
 EXPECTED_ENTRY_AGENT = "Orchestrator"
 EXPECTED_SPECIALIST_AGENTS = [
@@ -262,8 +265,13 @@ def run_tui_smoke(
     closed_models_at: float | None = None
     sent_prompt = False
     saw_expected = False
+    sent_handoff_prompt = False
+    saw_handoff = False
+    handoff_seen_at: float | None = None
+    sent_handoff_followup = False
     deadline = time.monotonic() + timeout
     expected_compact = compact(expected)
+    handoff_expected_compact = compact(HANDOFF_EXPECT)
     expected_agent_terms = [EXPECTED_AGENCY_NAME, EXPECTED_ENTRY_AGENT, *EXPECTED_SPECIALIST_AGENTS]
     expected_agent_compact = [compact(term) for term in expected_agent_terms]
 
@@ -280,6 +288,10 @@ def run_tui_smoke(
                     plain = strip_ansi(raw)
 
             compact_plain = compact(plain)
+            lower_compact = compact_plain.lower()
+
+            if "failedtostartresponsestream" in lower_compact or "cannotreachagency-swarmbackend" in lower_compact:
+                raise RuntimeError("OpenSwarm backend became unreachable during smoke test")
 
             if not sent_confirm and "Createalocal`.venv`inthisproject?" in compact_plain:
                 write(master_fd, "\r")
@@ -303,6 +315,27 @@ def run_tui_smoke(
             if check == "prompt" and run_mode_ready:
                 verified_agents = True
                 closed_agents_at = closed_agents_at or time.monotonic()
+
+            if check == "handoff" and run_mode_ready and not sent_handoff_prompt:
+                write(master_fd, HANDOFF_PROMPT + "\r")
+                sent_handoff_prompt = True
+
+            if sent_handoff_prompt and not saw_handoff:
+                if "transfer_to_Data_Analyst" in plain or "DataAnalyst" in compact_plain:
+                    saw_handoff = True
+                    handoff_seen_at = time.monotonic()
+
+            if (
+                saw_handoff
+                and not sent_handoff_followup
+                and handoff_seen_at is not None
+                and time.monotonic() - handoff_seen_at > 0.5
+            ):
+                write(master_fd, HANDOFF_FOLLOWUP_PROMPT + "\r")
+                sent_handoff_followup = True
+
+            if check == "handoff" and (HANDOFF_EXPECT in plain or handoff_expected_compact in compact_plain):
+                return plain
 
             agents_ready = check not in {"agents", "all"} or verified_agents
             if (
@@ -398,7 +431,9 @@ def run_tui_smoke(
         f"saw_models_slash={saw_models_slash} cleared_models_probe={cleared_models_probe} "
         f"sent_models_direct={sent_models_direct} saw_models_direct={saw_models_direct} "
         f"selected_models_command={selected_models_command} "
-        f"verified_models={verified_models} sent_prompt={sent_prompt} saw_expected={saw_expected} log={log_path}"
+        f"verified_models={verified_models} sent_prompt={sent_prompt} saw_expected={saw_expected} "
+        f"sent_handoff_prompt={sent_handoff_prompt} saw_handoff={saw_handoff} "
+        f"sent_handoff_followup={sent_handoff_followup} log={log_path}"
     )
 
 
@@ -414,7 +449,7 @@ def main() -> int:
         "--openswarm-tui-binary",
         help="Local OpenSwarm-branded AgentSwarm TUI binary to copy into the installed @vrsen/openswarm package.",
     )
-    parser.add_argument("--check", choices=["all", "agents", "models", "prompt"], default="all")
+    parser.add_argument("--check", choices=["all", "agents", "models", "prompt", "handoff"], default="all")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--expect", default=DEFAULT_EXPECT)
     parser.add_argument("--timeout", type=int, default=1200)
@@ -428,10 +463,10 @@ def main() -> int:
     openswarm_tui_binary = resolve_local_binary(args.openswarm_tui_binary) if args.openswarm_tui_binary else None
     models_fixture = resolve_models_fixture(agentswarm_path)
     api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key and args.check == "prompt" and os.environ.get("GITHUB_ACTIONS") == "true":
+    if not api_key and args.check in {"prompt", "handoff"} and os.environ.get("GITHUB_ACTIONS") == "true":
         print("Skipped OpenSwarm live prompt smoke because OPENAI_API_KEY is not configured")
         return 0
-    if not api_key and args.check in {"all", "prompt"}:
+    if not api_key and args.check in {"all", "prompt", "handoff"}:
         raise RuntimeError("OPENAI_API_KEY is required for the live prompt smoke test")
     auth_key = api_key or "dummy-openai-key-for-agent-roster-smoke"
     root = pathlib.Path(tempfile.mkdtemp(prefix="openswarm-run-mode-smoke-"))
@@ -483,6 +518,8 @@ def main() -> int:
             print("OpenSwarm /models smoke passed")
         if args.check in {"prompt", "all"}:
             print("OpenSwarm live prompt smoke passed")
+        if args.check == "handoff":
+            print("OpenSwarm handoff smoke passed")
         print(f"OpenSwarm smoke root package: {package_dir}")
         return 0
     finally:
