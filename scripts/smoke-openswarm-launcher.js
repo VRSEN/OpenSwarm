@@ -103,7 +103,7 @@ function load(opts) {
   assert.notEqual(startup, -1, 'launcher startup block not found')
   const script = new vm.Script(
     `${source.slice(start, startup)}
-module.exports = { getBinaryNames, isMuslLinux, shouldUseDependencyBinary, ensureCustomBinary }`,
+module.exports = { downstreamEnv, getBinaryNames, isMuslLinux, shouldUseDependencyBinary, ensureCustomBinary }`,
     { filename: launcher },
   )
   script.runInNewContext(context)
@@ -112,6 +112,23 @@ module.exports = { getBinaryNames, isMuslLinux, shouldUseDependencyBinary, ensur
     api: context.module.exports,
     requests,
   }
+}
+
+function assertProductAddons(api) {
+  assert.ok(api.downstreamEnv, 'downstreamEnv export not available')
+  assert.ok(api.downstreamEnv.AGENTSWARM_PRODUCT_ADDONS, 'AGENTSWARM_PRODUCT_ADDONS not set')
+
+  const addons = JSON.parse(api.downstreamEnv.AGENTSWARM_PRODUCT_ADDONS)
+  assert.deepEqual(addons, [
+    { id: 'search', title: 'Web Search', keys: ['SEARCH_API_KEY'] },
+    { id: 'anthropic', title: 'Anthropic Claude', keys: ['ANTHROPIC_API_KEY'], excludeProviders: ['anthropic'] },
+    { id: 'composio', title: 'Composio', keys: ['COMPOSIO_API_KEY', 'COMPOSIO_USER_ID'] },
+    { id: 'google', title: 'Google Gemini', keys: ['GOOGLE_API_KEY'], excludeProviders: ['google'] },
+    { id: 'fal', title: 'Fal.ai', keys: ['FAL_KEY'] },
+    { id: 'pexels', title: 'Pexels', keys: ['PEXELS_API_KEY'] },
+    { id: 'pixabay', title: 'Pixabay', keys: ['PIXABAY_API_KEY'] },
+    { id: 'unsplash', title: 'Unsplash', keys: ['UNSPLASH_ACCESS_KEY'] },
+  ])
 }
 
 async function main() {
@@ -124,6 +141,7 @@ async function main() {
   assert.equal(musl.api.shouldUseDependencyBinary(), true)
   assert.equal(await musl.api.ensureCustomBinary(), null)
   assert.deepEqual(musl.requests, [])
+  assertProductAddons(musl.api)
 
   const explicit = load({
     platform: 'linux',
