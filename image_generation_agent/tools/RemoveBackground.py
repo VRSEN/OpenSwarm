@@ -3,7 +3,6 @@
 import io
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 from urllib.parse import urlparse
 
 import fal_client
@@ -12,6 +11,7 @@ from PIL import Image
 from pydantic import Field, field_validator
 
 from agency_swarm import BaseTool
+from run_utils import _load_openswarm_dotenv
 from shared_tools.model_availability import image_model_availability_message
 
 from .utils.image_io import (
@@ -52,7 +52,7 @@ class RemoveBackground(BaseTool):
         return value
 
     def run(self) -> list:
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         api_key = os.getenv("FAL_KEY")
         if not api_key:
             raise ValueError(

@@ -1,10 +1,10 @@
 from agency_swarm import Agent, ModelSettings
 from openai.types.shared import Reasoning
-from dotenv import load_dotenv
 
 from config import get_default_model, is_openai_provider
+from run_utils import _load_openswarm_dotenv
 
-load_dotenv()
+_load_openswarm_dotenv()
 
 
 def create_orchestrator() -> Agent:

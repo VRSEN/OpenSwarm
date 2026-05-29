@@ -1,6 +1,6 @@
 import os
 
-from run_utils import _bootstrap, _preload_agentswarm_bin
+from run_utils import _bootstrap, _openswarm_state_root, _preload_agentswarm_bin
 
 _RUNTIME_CONFIGURED = False
 
@@ -19,7 +19,7 @@ def _configure_runtime() -> None:
     )
     from patches.patch_utf8_file_reads import apply_utf8_file_read_patch
 
-    load_dotenv()
+    load_dotenv(dotenv_path=_openswarm_state_root() / ".env")
 
     apply_utf8_file_read_patch()
     apply_dual_comms_patch()

@@ -4,7 +4,7 @@ from pydantic import Field
 import json
 
 import os
-from dotenv import load_dotenv
+from run_utils import _load_openswarm_dotenv
 
 
 class ProductSearch(BaseTool):
@@ -72,7 +72,7 @@ class ProductSearch(BaseTool):
     )
     
     def run(self):
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         try:
             import requests
             
@@ -253,4 +253,3 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Tests completed!")
     print("=" * 60)
-

@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
-from dotenv import load_dotenv
+from run_utils import _load_openswarm_dotenv
 
 from shared_tools.openai_client_utils import get_caller_openai_credentials
 
 
 def _refresh_runtime_env() -> None:
     """Reload add-on keys written through the TUI into the running process."""
-    load_dotenv(dotenv_path=Path.cwd() / ".env", override=True)
-    load_dotenv(override=True)
+    _load_openswarm_dotenv()
 
 
 def _configured(value: bool) -> str:

@@ -4,12 +4,12 @@ from io import BytesIO
 from typing import Literal
 
 import os
-from dotenv import load_dotenv
 from openai import OpenAI
 from PIL import Image
 from pydantic import Field, field_validator, model_validator
 
 from agency_swarm import BaseTool
+from run_utils import _load_openswarm_dotenv
 from shared_tools.model_availability import image_model_availability_message
 from shared_tools.openai_client_utils import get_openai_client
 
@@ -87,7 +87,7 @@ class CombineImages(BaseTool):
         return self
 
     def run(self) -> list:
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         images_dir = get_images_dir(self.product_name)
         reference_images = [resolve_image_reference(self.product_name, ref)[0] for ref in self.image_refs]
 
@@ -222,4 +222,3 @@ if __name__ == "__main__":
         print(result)
     except Exception as exc:
         print(f"Image composition failed: {exc}")
-

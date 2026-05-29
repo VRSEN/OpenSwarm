@@ -1,9 +1,10 @@
 # FastAPI entry point — run with: python server.py
 
 import logging
-from dotenv import load_dotenv
 
-load_dotenv()
+from run_utils import _load_openswarm_dotenv
+
+_load_openswarm_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

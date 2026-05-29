@@ -11,7 +11,6 @@ import base64
 import mimetypes
 import os
 import re
-from dotenv import load_dotenv
 import tempfile
 import threading
 from datetime import datetime, timezone
@@ -23,6 +22,7 @@ from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_image_from_
 from agents.extensions.models.litellm_model import LitellmModel
 from openai import AsyncOpenAI
 from pydantic import Field
+from run_utils import _load_openswarm_dotenv
 
 from .slide_file_utils import get_project_dir
 from .slide_html_utils import (
@@ -534,7 +534,7 @@ class ModifySlide(BaseTool):
     save_as_template_name: str | None = Field(default=None, description="Optional display name for saved template")
 
     async def run(self):
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         project_dir = get_project_dir(self.project_name)
         if not project_dir.exists():
             return f"Project not found: {project_dir}"

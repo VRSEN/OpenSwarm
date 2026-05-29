@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 import re
-from dotenv import load_dotenv
 import cv2
 import httpx
 from typing import Annotated, Literal, Optional, Union
@@ -15,6 +14,7 @@ from google.genai import types
 from PIL import Image
 
 from agency_swarm import BaseTool, ToolOutputText
+from run_utils import _load_openswarm_dotenv
 from shared_tools.model_availability import video_model_availability_message
 
 from .utils.video_utils import (
@@ -164,7 +164,7 @@ class EditVideoContent(BaseTool):
         return _ensure_not_blank(value, "name")
 
     async def run(self) -> list:
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         if self.mode.action == "remix":
             return await self._run_remix(self.mode)
         if self.mode.action == "extend":

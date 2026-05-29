@@ -48,9 +48,10 @@ def smoke_swarm_import_skips_bootstrap() -> None:
         "run_utils": module(
             "run_utils",
             _bootstrap=lambda: order.append("bootstrap"),
+            _openswarm_state_root=lambda: ROOT,
             _preload_agentswarm_bin=lambda: order.append("preload"),
         ),
-        "dotenv": module("dotenv", load_dotenv=lambda: order.append("dotenv")),
+        "dotenv": module("dotenv", load_dotenv=lambda *args, **kwargs: order.append("dotenv")),
         "agents": module(
             "agents",
             set_tracing_disabled=lambda _value: order.append("agents"),
@@ -142,6 +143,88 @@ def smoke_onboard_env_writes() -> None:
     missing = {key: value for key, value in expected.items() if values.get(key) != value}
     if missing:
         raise RuntimeError(f"onboarding did not write expected .env values: {missing}")
+
+
+def smoke_product_state_root_env() -> None:
+    sys.path.insert(0, str(ROOT))
+    try:
+        import run_utils
+    finally:
+        sys.path.pop(0)
+
+    with tempfile.TemporaryDirectory(prefix="openswarm-state-root-smoke-") as tmp:
+        root = Path(tmp).resolve()
+        env = root / ".env"
+        env.write_text(
+            'AGENTSWARM_BIN="/tmp/test-agentswarm"\nOPENAI_API_KEY="state-openai"\n',
+            encoding="utf-8",
+        )
+        caller = root / "caller"
+        caller.mkdir()
+        (caller / ".env").write_text(
+            'AGENTSWARM_BIN="/tmp/caller-agentswarm"\nOPENAI_API_KEY="caller-openai"\n',
+            encoding="utf-8",
+        )
+        old_state = os.environ.pop("AGENTSWARM_PRODUCT_STATE_ROOT", None)
+        old_bin = os.environ.pop("AGENTSWARM_BIN", None)
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_cwd = Path.cwd()
+        try:
+            os.chdir(caller)
+            with patch.dict(
+                os.environ,
+                {
+                    "OPENSWARM_STATE_ROOT": str(root),
+                    "AGENTSWARM_PRODUCT_STATE_ROOT": "/tmp/stale-openswarm-root",
+                    "AGENTSWARM_BIN": "/explicit/bin",
+                },
+                clear=False,
+            ):
+                run_utils._preload_agentswarm_bin()
+                run_utils._load_openswarm_dotenv()
+                run_utils._configure_product_env()
+
+                if os.environ.get("AGENTSWARM_PRODUCT_STATE_ROOT") != str(root):
+                    raise RuntimeError("OpenSwarm did not configure AGENTSWARM_PRODUCT_STATE_ROOT from OPENSWARM_STATE_ROOT")
+                if os.environ.get("OPENAI_API_KEY") != "state-openai":
+                    raise RuntimeError("OpenSwarm did not load dotenv values from the fixed state root before caller cwd")
+                if os.environ.get("AGENTSWARM_BIN") != "/explicit/bin":
+                    raise RuntimeError("OpenSwarm overwrote explicit AGENTSWARM_BIN from the fixed state root .env")
+        finally:
+            os.chdir(old_cwd)
+            if old_state is None:
+                os.environ.pop("AGENTSWARM_PRODUCT_STATE_ROOT", None)
+            else:
+                os.environ["AGENTSWARM_PRODUCT_STATE_ROOT"] = old_state
+            if old_bin is None:
+                os.environ.pop("AGENTSWARM_BIN", None)
+            else:
+                os.environ["AGENTSWARM_BIN"] = old_bin
+            if old_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+    with tempfile.TemporaryDirectory(prefix="openswarm-state-root-smoke-") as tmp:
+        base = Path(tmp).resolve()
+        root = base / "state"
+        caller = base / "caller"
+        caller.mkdir(parents=True)
+        (caller / ".env").write_text('AGENTSWARM_BIN="/tmp/caller-agentswarm"\n', encoding="utf-8")
+        old_bin = os.environ.pop("AGENTSWARM_BIN", None)
+        old_cwd = Path.cwd()
+        try:
+            os.chdir(caller)
+            with patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(root)}, clear=False):
+                run_utils._preload_agentswarm_bin(repo=caller)
+                if "AGENTSWARM_BIN" in os.environ:
+                    raise RuntimeError("OpenSwarm preloaded AGENTSWARM_BIN outside the fixed state root")
+        finally:
+            os.chdir(old_cwd)
+            if old_bin is None:
+                os.environ.pop("AGENTSWARM_BIN", None)
+            else:
+                os.environ["AGENTSWARM_BIN"] = old_bin
 
 
 def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
@@ -290,6 +373,7 @@ def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
 def main() -> int:
     smoke_swarm_import_skips_bootstrap()
     smoke_onboard_env_writes()
+    smoke_product_state_root_env()
     smoke_bootstrap_node_setup_installs_slides_dependencies()
     print("OpenSwarm import bootstrap and onboarding smoke passed")
     return 0

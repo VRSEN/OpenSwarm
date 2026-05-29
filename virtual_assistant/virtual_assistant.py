@@ -5,12 +5,12 @@ from agency_swarm.tools import (
     IPythonInterpreter,
 )
 from openai.types.shared import Reasoning
-from dotenv import load_dotenv
 
 from config import get_default_model, is_openai_provider
+from run_utils import _load_openswarm_dotenv
 from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
-load_dotenv()
+_load_openswarm_dotenv()
 
 # Class-level rename — idempotent, safe to run once at import time.
 IPythonInterpreter.__name__ = "ProgrammaticToolCalling"

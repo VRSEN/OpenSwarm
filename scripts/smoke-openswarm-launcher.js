@@ -76,6 +76,7 @@ function load(opts) {
     https: createClient(requests),
     os: {
       arch: () => opts.arch,
+      homedir: () => opts.homedir || '/home/tester',
     },
     path,
     'child_process': child,
@@ -103,7 +104,7 @@ function load(opts) {
   assert.notEqual(startup, -1, 'launcher startup block not found')
   const script = new vm.Script(
     `${source.slice(start, startup)}
-module.exports = { downstreamEnv, getBinaryNames, isMuslLinux, shouldUseDependencyBinary, ensureCustomBinary }`,
+module.exports = { downstreamEnv, getBinaryNames, isMuslLinux, resolveStateRoot, shouldUseDependencyBinary, ensureCustomBinary }`,
     { filename: launcher },
   )
   script.runInNewContext(context)
@@ -131,6 +132,42 @@ function assertProductAddons(api) {
   ])
 }
 
+function assertStateRoot() {
+  const linux = load({
+    platform: 'linux',
+    arch: 'x64',
+    homedir: '/home/tester',
+  })
+  assert.equal(linux.api.resolveStateRoot(), path.join('/home/tester', '.openswarm'))
+  assert.equal(linux.api.downstreamEnv.AGENTSWARM_PRODUCT_STATE_ROOT, path.join('/home/tester', '.openswarm'))
+
+  const darwin = load({
+    platform: 'darwin',
+    arch: 'arm64',
+    homedir: '/Users/tester',
+  })
+  assert.equal(darwin.api.resolveStateRoot(), path.join('/Users/tester', '.openswarm'))
+
+  const windows = load({
+    platform: 'win32',
+    arch: 'x64',
+    homedir: 'C:\\Users\\tester',
+    env: {
+      APPDATA: 'C:\\Users\\tester\\AppData\\Roaming',
+    },
+  })
+  assert.equal(windows.api.resolveStateRoot(), path.join('C:\\Users\\tester\\AppData\\Roaming', 'OpenSwarm'))
+
+  const explicit = load({
+    platform: 'linux',
+    arch: 'x64',
+    env: {
+      OPENSWARM_STATE_ROOT: '/tmp/openswarm-state',
+    },
+  })
+  assert.equal(explicit.api.resolveStateRoot(), path.resolve('/tmp/openswarm-state'))
+}
+
 async function main() {
   const musl = load({
     platform: 'linux',
@@ -142,6 +179,7 @@ async function main() {
   assert.equal(await musl.api.ensureCustomBinary(), null)
   assert.deepEqual(musl.requests, [])
   assertProductAddons(musl.api)
+  assertStateRoot()
 
   const explicit = load({
     platform: 'linux',

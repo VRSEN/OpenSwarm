@@ -5,7 +5,6 @@ import asyncio
 import logging
 import os
 import re
-from dotenv import load_dotenv
 import mimetypes
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,6 +18,7 @@ from PIL import Image as PILImage
 from io import BytesIO
 
 from agency_swarm import BaseTool, ToolOutputText
+from run_utils import _load_openswarm_dotenv
 from shared_tools.model_availability import video_model_availability_message
 from shared_tools.openai_client_utils import get_openai_client
 
@@ -168,7 +168,7 @@ class GenerateVideo(BaseTool):
 
     async def run(self) -> list:
         """Generate a marketing video using the chosen model."""
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         if is_seedance_model(self.model):
             return await self._generate_with_seedance(self.model)
 

@@ -5,9 +5,9 @@ import asyncio
 import inspect
 
 import os
-from dotenv import load_dotenv
 from agency_swarm.tools import BaseTool, LoadFileAttachment
 from pydantic import Field
+from run_utils import _load_openswarm_dotenv
 from shared_tools.model_availability import image_model_availability_message
 
 
@@ -53,7 +53,7 @@ class GenerateImage(BaseTool):
 
     def run(self) -> str:
         """Generate image and save to the project's assets folder."""
-        load_dotenv(override=True)
+        _load_openswarm_dotenv(override=True)
         from .slide_file_utils import get_project_dir
         try:
             full_prompt = self.prompt

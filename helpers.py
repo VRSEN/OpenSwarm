@@ -3,8 +3,9 @@ import os
 from composio import Composio
 from composio_openai_agents import OpenAIAgentsProvider
 
-from dotenv import load_dotenv
-load_dotenv()
+from run_utils import _load_openswarm_dotenv
+
+_load_openswarm_dotenv()
 
 _composio_clients: dict[str, Composio] = {}
 
