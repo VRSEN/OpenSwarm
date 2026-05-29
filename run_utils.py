@@ -32,6 +32,16 @@ _PRODUCT_WORDMARK_LINES = (
     '"╚██████╔╝██║     ███████╗██║ ╚████║ ███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║",'
     '" ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
 )
+_PRODUCT_ADDONS = (
+    '[{"id":"search","title":"Web Search","keys":["SEARCH_API_KEY"]},'
+    '{"id":"anthropic","title":"Anthropic Claude","keys":["ANTHROPIC_API_KEY"],"excludeProviders":["anthropic"]},'
+    '{"id":"composio","title":"Composio","keys":["COMPOSIO_API_KEY","COMPOSIO_USER_ID"]},'
+    '{"id":"google","title":"Google Gemini","keys":["GOOGLE_API_KEY"],"excludeProviders":["google"]},'
+    '{"id":"fal","title":"Fal.ai","keys":["FAL_KEY"]},'
+    '{"id":"pexels","title":"Pexels","keys":["PEXELS_API_KEY"]},'
+    '{"id":"pixabay","title":"Pixabay","keys":["PIXABAY_API_KEY"]},'
+    '{"id":"unsplash","title":"Unsplash","keys":["UNSPLASH_ACCESS_KEY"]}]'
+)
 
 
 def _openswarm_state_root() -> Path:
@@ -53,7 +63,7 @@ def _configure_product_env() -> None:
     os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_LEFT", _PRODUCT_TUI_LOGO_LEFT)
     os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT", _PRODUCT_TUI_LOGO_RIGHT)
     os.environ.setdefault("AGENTSWARM_PRODUCT_WORDMARK_LINES", _PRODUCT_WORDMARK_LINES)
-    os.environ.setdefault("AGENTSWARM_PRODUCT_ENABLE_ADDONS", "true")
+    os.environ.setdefault("AGENTSWARM_PRODUCT_ADDONS", _PRODUCT_ADDONS)
     os.environ["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
 
 

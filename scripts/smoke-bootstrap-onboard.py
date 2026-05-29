@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -190,6 +191,28 @@ def smoke_product_state_root_env() -> None:
                     raise RuntimeError("OpenSwarm did not load dotenv values from the fixed state root before caller cwd")
                 if os.environ.get("AGENTSWARM_BIN") != "/explicit/bin":
                     raise RuntimeError("OpenSwarm overwrote explicit AGENTSWARM_BIN from the fixed state root .env")
+                addons = json.loads(os.environ.get("AGENTSWARM_PRODUCT_ADDONS", "[]"))
+                if {addon.get("id") for addon in addons} != {
+                    "search",
+                    "anthropic",
+                    "composio",
+                    "google",
+                    "fal",
+                    "pexels",
+                    "pixabay",
+                    "unsplash",
+                }:
+                    raise RuntimeError("OpenSwarm Python path did not configure the generic add-ons JSON")
+                if "AGENTSWARM_PRODUCT_ENABLE_ADDONS" in os.environ:
+                    raise RuntimeError("OpenSwarm Python path still configured the legacy add-ons flag")
+                env.write_text(
+                    'AGENTSWARM_BIN="/tmp/test-agentswarm"\nOPENAI_API_KEY="state-openai-updated"\n',
+                    encoding="utf-8",
+                )
+                os.environ["OPENAI_API_KEY"] = "stale-openai"
+                run_utils._load_openswarm_dotenv(override=True)
+                if os.environ.get("OPENAI_API_KEY") != "state-openai-updated":
+                    raise RuntimeError("OpenSwarm post-onboarding dotenv refresh did not replace stale process values")
         finally:
             os.chdir(old_cwd)
             if old_state is None:

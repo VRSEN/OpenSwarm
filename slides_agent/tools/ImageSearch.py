@@ -32,7 +32,7 @@ class ImageSearch(BaseTool):
     )
 
     def run(self) -> str:
-        _load_openswarm_dotenv()
+        _load_openswarm_dotenv(override=True)
         providers = [p.lower() for p in (self.providers or ["unsplash", "pexels", "pixabay"])]
         results = []
         warnings = []
