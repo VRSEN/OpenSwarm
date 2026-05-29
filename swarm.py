@@ -1,6 +1,6 @@
 import os
 
-from run_utils import _bootstrap, _openswarm_state_root, _preload_agentswarm_bin
+from run_utils import _openswarm_state_root
 
 _RUNTIME_CONFIGURED = False
 
@@ -33,13 +33,6 @@ def _configure_runtime() -> None:
         set_tracing_disabled(True)
 
     _RUNTIME_CONFIGURED = True
-
-
-if __name__ == "__main__":
-    _preload_agentswarm_bin()
-    _bootstrap()
-
-_configure_runtime()
 
 
 def create_agency(load_threads_callback=None):
@@ -101,10 +94,8 @@ def create_agency(load_threads_callback=None):
     return agency
 
 
-def _main() -> None:
-    agency = create_agency()
-    agency.tui(show_reasoning=True, reload=False)
-
-
 if __name__ == "__main__":
-    _main()
+    from run_utils import main as _run_main
+    _run_main()
+else:
+    _configure_runtime()

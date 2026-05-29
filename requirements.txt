@@ -1,5 +1,7 @@
-agency-swarm[fastapi,jupyter,litellm]>=1.9.7
+agency-swarm[fastapi,jupyter,litellm]>=1.9.8
 questionary>=2.0.0
+python-dotenv
+rich
 fastapi
 uvicorn
 composio==0.8.0
@@ -28,6 +30,7 @@ nbformat>=5.0.0
 
 # Image processing (for load_images tool)
 pillow>=9.0.0
+opencv-python-headless
 
 # PowerPoint processing (for slides_agent)
 python-pptx>=1.0.0
@@ -43,7 +46,6 @@ cairosvg
 weasyprint
 html2text
 google-genai
-opencv-python-headless
 moviepy<2
 fal-client
 httpx

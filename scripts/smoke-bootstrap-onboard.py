@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import runpy
 import sys
 import tempfile
 import types
@@ -48,9 +49,7 @@ def smoke_swarm_import_skips_bootstrap() -> None:
     replacements = {
         "run_utils": module(
             "run_utils",
-            _bootstrap=lambda: order.append("bootstrap"),
             _openswarm_state_root=lambda: ROOT,
-            _preload_agentswarm_bin=lambda: order.append("preload"),
         ),
         "dotenv": module("dotenv", load_dotenv=lambda *args, **kwargs: order.append("dotenv")),
         "agents": module(
@@ -95,6 +94,27 @@ def smoke_swarm_import_skips_bootstrap() -> None:
         raise RuntimeError(f"swarm.py ran bootstrap during import: {order}")
     if not order or order[0] != "dotenv":
         raise RuntimeError(f"swarm.py did not configure runtime during import: {order}")
+
+
+def smoke_swarm_script_delegates_to_run_utils_main() -> None:
+    calls: list[str] = []
+    replacements = {
+        "run_utils": module(
+            "run_utils",
+            _openswarm_state_root=lambda: ROOT,
+            main=lambda: calls.append("main"),
+        ),
+    }
+    old_path = list(sys.path)
+    try:
+        with swapped_modules(replacements):
+            sys.path.insert(0, str(ROOT))
+            runpy.run_path(str(ROOT / "swarm.py"), run_name="__main__")
+    finally:
+        sys.path[:] = old_path
+
+    if calls != ["main"]:
+        raise RuntimeError(f"python swarm.py did not delegate to run_utils.main: {calls}")
 
 
 def smoke_onboard_env_writes() -> None:
@@ -167,6 +187,7 @@ def smoke_product_state_root_env() -> None:
             encoding="utf-8",
         )
         old_state = os.environ.pop("AGENTSWARM_PRODUCT_STATE_ROOT", None)
+        old_entry = os.environ.pop("AGENTSWARM_PRODUCT_ENTRY_FILES", None)
         old_bin = os.environ.pop("AGENTSWARM_BIN", None)
         old_key = os.environ.pop("OPENAI_API_KEY", None)
         old_cwd = Path.cwd()
@@ -187,6 +208,8 @@ def smoke_product_state_root_env() -> None:
 
                 if os.environ.get("AGENTSWARM_PRODUCT_STATE_ROOT") != str(root):
                     raise RuntimeError("OpenSwarm did not configure AGENTSWARM_PRODUCT_STATE_ROOT from OPENSWARM_STATE_ROOT")
+                if os.environ.get("AGENTSWARM_PRODUCT_ENTRY_FILES") != "swarm.py":
+                    raise RuntimeError("OpenSwarm Python path did not configure swarm.py as the product entry file")
                 if os.environ.get("OPENAI_API_KEY") != "state-openai":
                     raise RuntimeError("OpenSwarm did not load dotenv values from the fixed state root before caller cwd")
                 if os.environ.get("AGENTSWARM_BIN") != "/explicit/bin":
@@ -219,6 +242,10 @@ def smoke_product_state_root_env() -> None:
                 os.environ.pop("AGENTSWARM_PRODUCT_STATE_ROOT", None)
             else:
                 os.environ["AGENTSWARM_PRODUCT_STATE_ROOT"] = old_state
+            if old_entry is None:
+                os.environ.pop("AGENTSWARM_PRODUCT_ENTRY_FILES", None)
+            else:
+                os.environ["AGENTSWARM_PRODUCT_ENTRY_FILES"] = old_entry
             if old_bin is None:
                 os.environ.pop("AGENTSWARM_BIN", None)
             else:
@@ -395,6 +422,7 @@ def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
 
 def main() -> int:
     smoke_swarm_import_skips_bootstrap()
+    smoke_swarm_script_delegates_to_run_utils_main()
     smoke_onboard_env_writes()
     smoke_product_state_root_env()
     smoke_bootstrap_node_setup_installs_slides_dependencies()
