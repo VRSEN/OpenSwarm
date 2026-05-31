@@ -494,22 +494,10 @@ def main() -> int:
         package_dir = root / "node_modules" / "@vrsen" / "openswarm"
         if openswarm_tui_binary:
             install_openswarm_tui_binary(package_dir, openswarm_tui_binary)
-        generic_dir = root / "my-agency"
-        generic_dir.mkdir()
-        (generic_dir / "agency.py").write_text(
-            "\n".join(
-                [
-                    "from agency_swarm import Agency",
-                    "",
-                    "def create_agency(load_threads_callback=None):",
-                    "    return Agency(name='Generic Agency')",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        create_local_openswarm_project(package_dir, generic_dir)
-        plain = run_tui_smoke(launcher, package_dir, generic_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
+        workspace = root / "workspace"
+        workspace.mkdir()
+        create_local_openswarm_project(package_dir, workspace)
+        plain = run_tui_smoke(launcher, package_dir, workspace, root, env, args.check, args.prompt, args.expect, args.timeout)
         if "Agency Swarm Default" not in plain:
             raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
         if args.check in {"agents", "all"}:
