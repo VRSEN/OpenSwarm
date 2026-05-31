@@ -208,8 +208,8 @@ def smoke_product_state_root_env() -> None:
 
                 if os.environ.get("AGENTSWARM_PRODUCT_STATE_ROOT") != str(root):
                     raise RuntimeError("OpenSwarm did not configure AGENTSWARM_PRODUCT_STATE_ROOT from OPENSWARM_STATE_ROOT")
-                if os.environ.get("AGENTSWARM_PRODUCT_ENTRY_FILES") != "swarm.py":
-                    raise RuntimeError("OpenSwarm Python path did not configure swarm.py as the product entry file")
+                if os.environ.get("AGENTSWARM_PRODUCT_ENTRY_FILES") != "swarm.py,agency.py":
+                    raise RuntimeError("OpenSwarm Python path did not configure the expected product entry files")
                 if os.environ.get("OPENAI_API_KEY") != "state-openai":
                     raise RuntimeError("OpenSwarm did not load dotenv values from the fixed state root before caller cwd")
                 if os.environ.get("AGENTSWARM_BIN") != "/explicit/bin":

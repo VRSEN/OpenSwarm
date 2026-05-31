@@ -132,6 +132,10 @@ function assertProductAddons(api) {
   ])
 }
 
+function assertProductEntryFiles(api) {
+  assert.equal(api.downstreamEnv.AGENTSWARM_PRODUCT_ENTRY_FILES, 'swarm.py,agency.py')
+}
+
 function assertStateRoot() {
   const linux = load({
     platform: 'linux',
@@ -178,6 +182,7 @@ async function main() {
   assert.equal(musl.api.shouldUseDependencyBinary(), true)
   assert.equal(await musl.api.ensureCustomBinary(), null)
   assert.deepEqual(musl.requests, [])
+  assertProductEntryFiles(musl.api)
   assertProductAddons(musl.api)
   assertStateRoot()
 
