@@ -102,8 +102,17 @@ def platform_asset_name() -> str:
     )
 
 
+def platform_package_name() -> str:
+    asset = platform_asset_name()
+    if asset.endswith(".exe"):
+        asset = asset[:-4]
+    return asset.replace("agentswarm-", "@vrsen/openswarm-cli-", 1)
+
+
 def install_openswarm_tui_binary(package_dir: pathlib.Path, binary: pathlib.Path) -> pathlib.Path:
-    target = package_dir / platform_asset_name()
+    executable = "agentswarm.exe" if sys.platform == "win32" else "agentswarm"
+    target = package_dir / "node_modules" / pathlib.Path(*platform_package_name().split("/")) / "bin" / executable
+    target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary, target)
     if os.name != "nt":
         target.chmod(target.stat().st_mode | 0o111)

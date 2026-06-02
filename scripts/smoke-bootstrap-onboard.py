@@ -203,8 +203,8 @@ def smoke_product_state_root_env() -> None:
                     "unsplash",
                 }:
                     raise RuntimeError("OpenSwarm Python path did not configure the generic add-ons JSON")
-                if "AGENTSWARM_PRODUCT_ENABLE_ADDONS" in os.environ:
-                    raise RuntimeError("OpenSwarm Python path still configured the legacy add-ons flag")
+                if os.environ.get("AGENTSWARM_PRODUCT_ENABLE_ADDONS") != "true":
+                    raise RuntimeError("OpenSwarm Python path did not enable AgentSwarm add-ons")
                 env.write_text(
                     'AGENTSWARM_BIN="/tmp/test-agentswarm"\nOPENAI_API_KEY="state-openai-updated"\n',
                     encoding="utf-8",
@@ -248,6 +248,110 @@ def smoke_product_state_root_env() -> None:
                 os.environ.pop("AGENTSWARM_BIN", None)
             else:
                 os.environ["AGENTSWARM_BIN"] = old_bin
+
+    with tempfile.TemporaryDirectory(prefix="openswarm-userbase-config-smoke-") as tmp:
+        base = Path(tmp).resolve()
+        module_dir = base / "site-packages"
+        prefix = base / "venv"
+        userbase = base / "user-base"
+        module_dir.mkdir()
+        prefix.mkdir()
+        userbase.mkdir()
+        (userbase / "openswarm.config.mjs").write_text(
+            (ROOT / "openswarm.config.mjs").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (userbase / "openswarm.product-env.json").write_text(
+            (ROOT / "openswarm.product-env.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (userbase / "package.json").write_text('{"version":"9.8.7-userbase"}\n', encoding="utf-8")
+
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            values = run_utils._product_env_from_config()
+        if values.get("AGENTSWARM_PRODUCT_VERSION") != "9.8.7-userbase":
+            raise RuntimeError("OpenSwarm Python path did not find fallback product config in site.USER_BASE without Node")
+        if values.get("AGENTSWARM_PRODUCT_DISPLAY_NAME") != "OpenSwarm":
+            raise RuntimeError("OpenSwarm Python path loaded wrong fallback product config from site.USER_BASE")
+
+
+def smoke_python_openswarm_tui_binary_resolution() -> None:
+    sys.path.insert(0, str(ROOT))
+    try:
+        import run_utils
+    finally:
+        sys.path.pop(0)
+
+    if run_utils._openswarm_package_names("linux", "x64", musl=True, baseline=True) != [
+        "@vrsen/openswarm-cli-linux-x64-baseline-musl",
+        "@vrsen/openswarm-cli-linux-x64-musl",
+        "@vrsen/openswarm-cli-linux-x64-baseline",
+        "@vrsen/openswarm-cli-linux-x64",
+    ]:
+        raise RuntimeError("OpenSwarm Python path did not prefer linux x64 baseline musl packages")
+    if run_utils._openswarm_package_names("linux", "x64", musl=False, baseline=True) != [
+        "@vrsen/openswarm-cli-linux-x64-baseline",
+        "@vrsen/openswarm-cli-linux-x64",
+        "@vrsen/openswarm-cli-linux-x64-baseline-musl",
+        "@vrsen/openswarm-cli-linux-x64-musl",
+    ]:
+        raise RuntimeError("OpenSwarm Python path did not prefer linux x64 baseline glibc packages")
+    if run_utils._openswarm_package_names("linux", "arm64", musl=True, baseline=False) != [
+        "@vrsen/openswarm-cli-linux-arm64-musl",
+        "@vrsen/openswarm-cli-linux-arm64",
+    ]:
+        raise RuntimeError("OpenSwarm Python path did not include linux arm64 musl package fallback")
+    if run_utils._openswarm_package_names("windows", "x64", musl=False, baseline=True) != [
+        "@vrsen/openswarm-cli-windows-x64-baseline",
+        "@vrsen/openswarm-cli-windows-x64",
+    ]:
+        raise RuntimeError("OpenSwarm Python path did not prefer windows x64 baseline packages")
+
+    with tempfile.TemporaryDirectory(prefix="openswarm-python-tui-smoke-") as tmp:
+        root = Path(tmp).resolve()
+        package = root / "node_modules" / "@vrsen" / "openswarm-cli-linux-x64-baseline-musl" / "bin"
+        package.mkdir(parents=True)
+        binary = package / "agentswarm"
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
+        module_dir = root / "site-packages"
+        module_dir.mkdir()
+        state = root / "state"
+        state.mkdir()
+
+        old_bin = os.environ.pop("AGENTSWARM_BIN", None)
+        try:
+            with (
+                patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+                patch.object(run_utils.sys, "platform", "linux"),
+                patch.object(run_utils.platform_module, "machine", lambda: "x86_64"),
+                patch.object(run_utils, "_supports_avx2", lambda _platform, _arch: False),
+                patch.object(run_utils, "_is_musl", lambda: True),
+                patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(state)}, clear=False),
+            ):
+                run_utils._preload_agentswarm_bin(repo=module_dir)
+                if os.environ.get("AGENTSWARM_BIN") != str(binary):
+                    raise RuntimeError("OpenSwarm Python path did not preload the npm optional-package TUI binary")
+        finally:
+            if old_bin is None:
+                os.environ.pop("AGENTSWARM_BIN", None)
+            else:
+                os.environ["AGENTSWARM_BIN"] = old_bin
+
+    with (
+        patch.object(run_utils.sys, "platform", "win32"),
+        patch.object(run_utils.platform_module, "machine", lambda: "AMD64"),
+        patch.object(run_utils, "_supports_avx2", lambda _platform, _arch: False),
+        patch.object(run_utils, "_is_musl", lambda: False),
+    ):
+        specs = run_utils._openswarm_platform_packages()
+    if specs[0] != ("@vrsen/openswarm-cli-windows-x64-baseline", "agentswarm.exe"):
+        raise RuntimeError(f"OpenSwarm Python path did not use the Windows .exe binary name: {specs}")
 
 
 def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
@@ -392,11 +496,58 @@ def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
     if invoked != [(ROOT, "npm")]:
         raise RuntimeError(f"bootstrap did not invoke Node dependency setup for package.json: {invoked}")
 
+    with tempfile.TemporaryDirectory(prefix="openswarm-bootstrap-tui-smoke-") as tmp:
+        repo = Path(tmp).resolve()
+        repo.joinpath("package.json").write_text('{"dependencies":{}}\n', encoding="utf-8")
+        state = repo / "state"
+        state.mkdir()
+        binary = (
+            repo
+            / "node_modules"
+            / "@vrsen"
+            / "openswarm-cli-linux-x64-baseline-musl"
+            / "bin"
+            / "agentswarm"
+        )
+
+        def setup_node(repo: Path, npm: str) -> None:
+            invoked.append((repo, npm))
+            binary.parent.mkdir(parents=True)
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+        old_bin = os.environ.pop("AGENTSWARM_BIN", None)
+        invoked.clear()
+        try:
+            with (
+                swapped_modules(replacements),
+                patch.object(run_utils, "__file__", str(repo / "run_utils.py")),
+                patch.object(run_utils.sys, "platform", "linux"),
+                patch.object(run_utils.platform_module, "machine", lambda: "x86_64"),
+                patch.object(run_utils, "_supports_avx2", lambda _platform, _arch: False),
+                patch.object(run_utils, "_is_musl", lambda: True),
+                patch.object(run_utils.shutil, "which", which),
+                patch.object(run_utils.subprocess, "check_call", lambda *_args, **_kwargs: None),
+                patch.object(run_utils, "_ensure_node_dependencies", setup_node),
+                patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(state)}, clear=False),
+            ):
+                run_utils._bootstrap()
+                if os.environ.get("AGENTSWARM_BIN") != str(binary):
+                    raise RuntimeError("bootstrap did not preload OpenSwarm TUI after npm optional-package setup")
+        finally:
+            if old_bin is None:
+                os.environ.pop("AGENTSWARM_BIN", None)
+            else:
+                os.environ["AGENTSWARM_BIN"] = old_bin
+
+    if invoked != [(repo, "npm")]:
+        raise RuntimeError(f"bootstrap did not run npm setup before post-bootstrap TUI preload: {invoked}")
+
 
 def main() -> int:
     smoke_swarm_import_skips_bootstrap()
     smoke_onboard_env_writes()
     smoke_product_state_root_env()
+    smoke_python_openswarm_tui_binary_resolution()
     smoke_bootstrap_node_setup_installs_slides_dependencies()
     print("OpenSwarm import bootstrap and onboarding smoke passed")
     return 0

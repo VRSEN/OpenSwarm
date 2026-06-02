@@ -76,8 +76,16 @@ jobs:
           required_assets=(
             agentswarm-darwin-arm64
             agentswarm-darwin-x64
+            agentswarm-darwin-x64-baseline
+            agentswarm-linux-arm64
+            agentswarm-linux-arm64-musl
             agentswarm-linux-x64
+            agentswarm-linux-x64-baseline
+            agentswarm-linux-x64-baseline-musl
+            agentswarm-linux-x64-musl
+            agentswarm-windows-arm64.exe
             agentswarm-windows-x64.exe
+            agentswarm-windows-x64-baseline.exe
           )
 
           for required in "${required_assets[@]}"; do
@@ -91,6 +99,37 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download platform release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --dir dist --clobber
+
+      - name: Pack platform npm packages
+        run: node scripts/package-platform-binaries.mjs dist platform-packages
+
+      - name: Publish platform npm packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find platform-packages -maxdepth 1 -name '*.tgz' -type f | sort)
+          if (( ${#packages[@]} != 12 )); then
+            echo "Expected 12 OpenSwarm platform packages, got ${#packages[@]}." >&2
+            exit 1
+          fi
+          for package in "${packages[@]}"; do
+            pkg_id="$(tar -xOf "$package" package/package.json | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.name+'@'+pkg.version)")"
+            if npm view "$pkg_id" version >/dev/null 2>&1; then
+              echo "Skipping $pkg_id; already published."
+              continue
+            fi
+            npm publish "$package" --access public --tag "$NPM_TAG"
+          done
 
       - name: Publish npm package
         run: npm publish --access public --tag "$NPM_TAG"

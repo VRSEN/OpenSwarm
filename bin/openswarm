@@ -1,74 +1,128 @@
 #!/usr/bin/env node
 'use strict'
 
-const { spawnSync } = require('child_process')
+const childProcess = require('child_process')
 const fs = require('fs')
-const http = require('http')
-const https = require('https')
-const os = require('os')
 const path = require('path')
+const { pathToFileURL } = require('url')
 
 const scriptPath = fs.realpathSync(__filename)
 const packageDir = path.dirname(path.dirname(scriptPath))
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
-const productTuiLogoLeft = [
-  '                                    ',
-  ' ██████╗ ██████╗ ███████╗███╗   ██╗',
-  '██╔═══██╗██╔══██╗██╔════╝████╗  ██║',
-  '██║   ██║██████╔╝█████╗  ██╔██╗ ██║',
-  '██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║',
-  '╚██████╔╝██║     ███████╗██║ ╚████║',
-  ' ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝',
-]
-const productTuiLogoRight = [
-  '',
-  '███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗',
-  '██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║',
-  '███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║',
-  '╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║',
-  '███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║',
-  '╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝',
-]
-const productWordmarkLines = productTuiLogoLeft.map((line, index) => `${line} ${productTuiLogoRight[index] ?? ''}`.trimEnd())
-const productAddons = [
-  { id: 'search', title: 'Web Search', keys: ['SEARCH_API_KEY'] },
-  { id: 'anthropic', title: 'Anthropic Claude', keys: ['ANTHROPIC_API_KEY'], excludeProviders: ['anthropic'] },
-  { id: 'composio', title: 'Composio', keys: ['COMPOSIO_API_KEY', 'COMPOSIO_USER_ID'] },
-  { id: 'google', title: 'Google Gemini', keys: ['GOOGLE_API_KEY'], excludeProviders: ['google'] },
-  { id: 'fal', title: 'Fal.ai', keys: ['FAL_KEY'] },
-  { id: 'pexels', title: 'Pexels', keys: ['PEXELS_API_KEY'] },
-  { id: 'pixabay', title: 'Pixabay', keys: ['PIXABAY_API_KEY'] },
-  { id: 'unsplash', title: 'Unsplash', keys: ['UNSPLASH_ACCESS_KEY'] },
-]
-function resolveStateRoot() {
-  const explicit = process.env.OPENSWARM_STATE_ROOT && process.env.OPENSWARM_STATE_ROOT.trim()
-  if (explicit) return path.resolve(explicit)
-  if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'OpenSwarm')
-  }
-  return path.join(os.homedir(), '.openswarm')
+
+function platformPackages() {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux'
+  const extension = process.platform === 'win32' ? '.exe' : ''
+  const base = `@vrsen/openswarm-cli-${platform}-${arch}`
+  const binary = `agentswarm${extension}`
+  const baseline = arch === 'x64' && !supportsAvx2(platform, arch)
+  return packageSpecs(packageNames(platform, arch, base, baseline), binary)
 }
 
-const downstreamEnv = {
-  AGENTSWARM_PRODUCT_DISPLAY_NAME: 'OpenSwarm',
-  AGENTSWARM_PRODUCT_COMMAND: 'openswarm',
-  AGENTSWARM_PRODUCT_PACKAGE_NAME: '@vrsen/openswarm',
-  AGENTSWARM_PRODUCT_LAUNCHER_PACKAGE_NAME: '@vrsen/openswarm',
-  AGENTSWARM_PRODUCT_RELEASE_REPO: 'VRSEN/OpenSwarm',
-  AGENTSWARM_PRODUCT_DOCS_URL: 'https://github.com/VRSEN/OpenSwarm',
-  AGENTSWARM_PRODUCT_ISSUE_URL: 'https://github.com/VRSEN/OpenSwarm/issues/new?template=bug-report.yml',
-  AGENTSWARM_PRODUCT_MDNS_DOMAIN: 'openswarm.local',
-  AGENTSWARM_PRODUCT_STARTER_REPO: 'VRSEN/OpenSwarm',
-  AGENTSWARM_PRODUCT_STARTER_FOLDER: 'openswarm',
-  AGENTSWARM_PRODUCT_ENTRY_FILES: 'swarm.py',
-  AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION: 'true',
-  AGENTSWARM_PRODUCT_TUI_LOGO_LEFT: JSON.stringify(productTuiLogoLeft),
-  AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: JSON.stringify(productTuiLogoRight),
-  AGENTSWARM_PRODUCT_WORDMARK_LINES: JSON.stringify(productWordmarkLines),
-  AGENTSWARM_PRODUCT_PYTHON_ENVIRONMENT: 'standalone',
-  AGENTSWARM_PRODUCT_ADDONS: JSON.stringify(productAddons),
-  AGENTSWARM_PRODUCT_STATE_ROOT: resolveStateRoot(),
-  AGENTSWARM_PRODUCT_VERSION: packageJson.version,
+function packageSpecs(names, binary) {
+  return names.map((name) => ({ name, binary }))
+}
+
+function packageNames(platform, arch, base, baseline) {
+  if (platform === 'linux') {
+    const musl = isMusl()
+    if (arch === 'x64') {
+      if (musl) {
+        if (baseline) return [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
+        return [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`]
+      }
+      if (baseline) return [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
+      return [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`]
+    }
+    if (musl) return [`${base}-musl`, base]
+    return [base, `${base}-musl`]
+  }
+
+  if (arch === 'x64') {
+    if (baseline) return [`${base}-baseline`, base]
+    return [base, `${base}-baseline`]
+  }
+
+  return [base]
+}
+
+function supportsAvx2(platform, arch) {
+  if (arch !== 'x64') return false
+
+  if (platform === 'linux') {
+    try {
+      return /(^|\s)avx2(\s|$)/i.test(fs.readFileSync('/proc/cpuinfo', 'utf8'))
+    } catch {
+      return false
+    }
+  }
+
+  if (platform === 'darwin') {
+    try {
+      const result = childProcess.spawnSync('sysctl', ['-n', 'hw.optional.avx2_0'], {
+        encoding: 'utf8',
+        timeout: 1500,
+      })
+      if (result.status !== 0) return false
+      return (result.stdout || '').trim() === '1'
+    } catch {
+      return false
+    }
+  }
+
+  if (platform === 'windows') {
+    const cmd =
+      '(Add-Type -MemberDefinition "[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)'
+    for (const exe of ['powershell.exe', 'pwsh.exe', 'pwsh', 'powershell']) {
+      try {
+        const result = childProcess.spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', cmd], {
+          encoding: 'utf8',
+          timeout: 3000,
+          windowsHide: true,
+        })
+        if (result.status !== 0) continue
+        const out = (result.stdout || '').trim().toLowerCase()
+        if (out === 'true' || out === '1') return true
+        if (out === 'false' || out === '0') return false
+      } catch {
+        continue
+      }
+    }
+  }
+
+  return false
+}
+
+function isMusl() {
+  try {
+    if (fs.existsSync('/etc/alpine-release')) return true
+  } catch {}
+
+  try {
+    const result = childProcess.spawnSync('ldd', ['--version'], { encoding: 'utf8' })
+    const text = `${result.stdout || ''}${result.stderr || ''}`.toLowerCase()
+    return text.includes('musl')
+  } catch {
+    return false
+  }
+}
+
+function resolveOpenSwarmBinary(startDir) {
+  const tried = []
+  for (const spec of platformPackages()) {
+    let current = startDir
+    const parts = spec.name.split('/')
+    for (;;) {
+      const candidate = path.join(current, 'node_modules', ...parts, 'bin', spec.binary)
+      tried.push(candidate)
+      if (fs.existsSync(candidate)) return candidate
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+  }
+  return { tried }
 }
 
 function resolveAgentswarm(startDir) {
@@ -88,176 +142,13 @@ function resolveAgentswarm(startDir) {
   }
 }
 
-function getBinaryNames() {
-  const arch = os.arch() === 'arm64' ? 'arm64' : 'x64'
-  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux'
-  const extension = process.platform === 'win32' ? '.exe' : ''
-  const names = [`agentswarm-${platform}-${arch}${extension}`]
-  if (arch === 'x64') {
-    names.push(`agentswarm-${platform}-${arch}-baseline${extension}`)
-  }
-  return names
-}
-
-function hasExplicitTuiUrl() {
-  return Boolean(process.env.OPENSWARM_TUI_URL && process.env.OPENSWARM_TUI_URL.trim())
-}
-
-function isMuslLinux() {
-  if (process.platform !== 'linux') return false
-
-  try {
-    if (fs.existsSync('/etc/alpine-release')) return true
-  } catch {}
-
-  try {
-    const result = spawnSync('ldd', ['--version'], {
-      encoding: 'utf8',
-      timeout: 1500,
-    })
-    const output = `${result.stdout || ''}\n${result.stderr || ''}`.toLowerCase()
-    return output.includes('musl')
-  } catch {
-    return false
-  }
-}
-
-function shouldUseDependencyBinary() {
-  return isMuslLinux() && !hasExplicitTuiUrl()
-}
-
-function getDownloadUrl(binaryName) {
-  const explicit = hasExplicitTuiUrl() ? process.env.OPENSWARM_TUI_URL.trim() : ''
-  if (explicit) return explicit
-  return `https://github.com/VRSEN/OpenSwarm/releases/download/v${packageJson.version}/${binaryName}`
-}
-
-function resolveCustomBinary(binaryPath) {
-  try {
-    const stat = fs.statSync(binaryPath)
-    if (!stat.isFile() || stat.size <= 0) return null
-    if (process.platform !== 'win32' && (stat.mode & 0o111) === 0) {
-      fs.chmodSync(binaryPath, 0o755)
-    }
-    if (!validateBinary(binaryPath)) return null
-    return binaryPath
-  } catch {
-    return null
-  }
-}
-
-function validateBinary(binaryPath) {
-  const result = spawnSync(binaryPath, ['--version'], {
-    env: {
-      ...process.env,
-      AGENTSWARM_LAUNCHER: '0',
-      ...downstreamEnv,
-    },
-    encoding: 'utf8',
-    timeout: 15000,
-  })
-  if (result.error) return false
-  if (typeof result.status !== 'number' || result.status !== 0) return false
-  const output = `${result.stdout || ''}\n${result.stderr || ''}`
-  return /\d+\.\d+\.\d+/.test(output)
-}
-
-function request(url, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https:') ? https : url.startsWith('http:') ? http : null
-    if (!client) {
-      reject(new Error(`Unsupported protocol for ${url}`))
-      return
-    }
-
-    const req = client.get(
-      url,
-      {
-        headers: {
-          'User-Agent': '@vrsen/openswarm',
-        },
-      },
-      (res) => {
-        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-          res.resume()
-          if (redirects >= 5) {
-            reject(new Error('Too many redirects'))
-            return
-          }
-          resolve(request(new URL(res.headers.location, url).toString(), redirects + 1))
-          return
-        }
-        if (res.statusCode !== 200) {
-          res.resume()
-          reject(new Error(`HTTP ${res.statusCode}`))
-          return
-        }
-        resolve(res)
-      },
-    )
-
-    req.setTimeout(30000, () => req.destroy(new Error('Request timed out')))
-    req.on('error', reject)
-  })
-}
-
-async function download(url, destination) {
-  const tempPath = `${destination}.part-${process.pid}-${Date.now()}`
-  let finished = false
-  try {
-    const response = await request(url)
-    await new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(tempPath)
-      response.on('error', reject)
-      file.on('error', reject)
-      file.on('close', resolve)
-      response.pipe(file)
-    })
-    const stat = fs.statSync(tempPath)
-    if (!stat.isFile() || stat.size <= 0) {
-      throw new Error('Empty download')
-    }
-    if (process.platform !== 'win32') {
-      fs.chmodSync(tempPath, 0o755)
-    }
-    fs.rmSync(destination, { force: true })
-    fs.renameSync(tempPath, destination)
-    finished = true
-  } finally {
-    if (!finished) {
-      fs.rmSync(tempPath, { force: true })
-    }
-  }
-}
-
-async function ensureCustomBinary() {
-  if (shouldUseDependencyBinary()) return null
-
-  const binaryNames = getBinaryNames()
-  for (const binaryName of binaryNames) {
-    const existing = resolveCustomBinary(path.join(packageDir, binaryName))
-    if (existing) return existing
-  }
-
-  process.stdout.write('Downloading OpenSwarm TUI...\n')
-  const errors = []
-  for (const binaryName of binaryNames) {
-    const binaryPath = path.join(packageDir, binaryName)
-    fs.rmSync(binaryPath, { force: true })
-    try {
-      await download(getDownloadUrl(binaryName), binaryPath)
-      const resolved = resolveCustomBinary(binaryPath)
-      if (resolved) return resolved
-      fs.rmSync(binaryPath, { force: true })
-      throw new Error('Downloaded custom TUI binary failed validation')
-    } catch (error) {
-      fs.rmSync(binaryPath, { force: true })
-      errors.push(`${binaryName}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  throw new Error(
-    `custom OpenSwarm TUI unavailable (${errors.join('; ')}). Reinstall @vrsen/openswarm or set OPENSWARM_TUI_URL to a valid binary.`,
+const openswarmBinary = resolveOpenSwarmBinary(packageDir)
+if (!openswarmBinary || typeof openswarmBinary !== 'string') {
+  const packages = platformPackages().map((item) => item.name).join(', ')
+  process.stderr.write(
+    `openswarm: could not resolve an OpenSwarm TUI binary package for this platform. Reinstall @vrsen/openswarm with optional dependencies enabled. Expected one of: ${packages}.\n`,
   )
+  process.exit(1)
 }
 
 const agentswarmBin = resolveAgentswarm(packageDir)
@@ -267,17 +158,17 @@ if (!agentswarmBin) {
 }
 
 async function main() {
-  const customBinary = await ensureCustomBinary()
+  const config = await import(pathToFileURL(path.join(packageDir, 'openswarm.config.mjs')).href)
   const env = {
     ...process.env,
-    ...downstreamEnv,
+    ...config.getProductEnv({ version: packageJson.version }),
     AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1',
+    AGENTSWARM_BIN_PATH: openswarmBinary,
     PYTHONUTF8: process.env.PYTHONUTF8 || '1',
     PYTHONIOENCODING: process.env.PYTHONIOENCODING || 'utf-8',
   }
-  if (customBinary) env.AGENTSWARM_BIN_PATH = customBinary
 
-  const result = spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
+  const result = childProcess.spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {
     stdio: 'inherit',
     env,
   })

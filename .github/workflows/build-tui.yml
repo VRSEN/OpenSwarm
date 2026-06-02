@@ -149,7 +149,7 @@ jobs:
             arch: x64
             baseline: true
             build_all: true
-            asset: agentswarm-windows-x64-baseline.exe
+            asset: build-all-assets
           - os: windows-11-arm
             platform: windows
             arch: arm64
@@ -160,6 +160,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'dev' || 'prod' }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: openswarm
+
       - uses: actions/checkout@v4
         with:
           repository: VRSEN/agentswarm-cli
@@ -183,6 +187,12 @@ jobs:
         working-directory: agentswarm-cli
         run: bun install
 
+      - name: Load OpenSwarm product env
+        working-directory: openswarm
+        env:
+          OPENSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
+        run: node -e "const fs=require('fs');const cp=require('child_process');fs.appendFileSync(process.env.GITHUB_ENV,cp.execFileSync(process.execPath,['scripts/write-product-env.mjs'],{encoding:'utf8'}));"
+
       - name: Build binary
         working-directory: agentswarm-cli/packages/opencode
         env:
@@ -191,24 +201,6 @@ jobs:
           OPENCODE_CHANNEL: ${{ needs.prepare.outputs.npm_tag }}
           AGENTSWARM_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
           AGENTSWARM_POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
-          AGENTSWARM_PRODUCT_DISPLAY_NAME: OpenSwarm
-          AGENTSWARM_PRODUCT_COMMAND: openswarm
-          AGENTSWARM_PRODUCT_PACKAGE_NAME: "@vrsen/openswarm"
-          AGENTSWARM_PRODUCT_LAUNCHER_PACKAGE_NAME: "@vrsen/openswarm"
-          AGENTSWARM_PRODUCT_RELEASE_REPO: VRSEN/OpenSwarm
-          AGENTSWARM_PRODUCT_DOCS_URL: https://github.com/VRSEN/OpenSwarm
-          AGENTSWARM_PRODUCT_ISSUE_URL: https://github.com/VRSEN/OpenSwarm/issues/new?template=bug-report.yml
-          AGENTSWARM_PRODUCT_MDNS_DOMAIN: openswarm.local
-          AGENTSWARM_PRODUCT_STARTER_REPO: VRSEN/OpenSwarm
-          AGENTSWARM_PRODUCT_STARTER_FOLDER: openswarm
-          AGENTSWARM_PRODUCT_ENTRY_FILES: swarm.py
-          AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION: "true"
-          AGENTSWARM_PRODUCT_TUI_LOGO_LEFT: '["                                    "," ██████╗ ██████╗ ███████╗███╗   ██╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║","╚██████╔╝██║     ███████╗██║ ╚████║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝"]'
-          AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: '["","███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║","███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║","╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
-          AGENTSWARM_PRODUCT_WORDMARK_LINES: '[""," ██████╗ ██████╗ ███████╗███╗   ██╗ ███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║ ██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║ ███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║ ╚════██║██║███╗██║██╔══██╗██╔══██╗██║╚██╔╝██║","╚██████╔╝██║     ███████╗██║ ╚████║ ███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
-          AGENTSWARM_PRODUCT_PYTHON_ENVIRONMENT: standalone
-          AGENTSWARM_PRODUCT_ENABLE_ADDONS: "true"
-          AGENTSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
         run: |
           node -e "const cp=require('child_process');const all=process.env.BUILD_ALL==='true';const args=all?['run','script/build.ts']:['run','script/build.ts','--single','--skip-install',...(process.env.BASELINE==='true'?['--baseline']:[])];cp.execFileSync('bun',args,{stdio:'inherit'});"
 
@@ -216,6 +208,13 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          if [[ "${{ matrix.build_all || false }}" == "true" ]]; then
+            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-arm64-musl/bin/agentswarm agentswarm-linux-arm64-musl
+            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-x64-musl/bin/agentswarm agentswarm-linux-x64-musl
+            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-x64-baseline-musl/bin/agentswarm agentswarm-linux-x64-baseline-musl
+            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-windows-x64-baseline/bin/agentswarm.exe agentswarm-windows-x64-baseline.exe
+            exit 0
+          fi
           binary="agentswarm"
           if [[ "${{ matrix.platform }}" == "windows" ]]; then
             binary="agentswarm.exe"
@@ -231,10 +230,23 @@ jobs:
             ${{ matrix.asset }}
 
       - name: Upload artifact
+        if: ${{ matrix.build_all != true }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+      - name: Upload build-all artifacts
+        if: ${{ matrix.build_all == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-all-assets
+          path: |
+            agentswarm-linux-arm64-musl
+            agentswarm-linux-x64-musl
+            agentswarm-linux-x64-baseline-musl
+            agentswarm-windows-x64-baseline.exe
           if-no-files-found: error
 
   release:
@@ -349,8 +361,11 @@ jobs:
             agentswarm-darwin-x64
             agentswarm-darwin-x64-baseline
             agentswarm-linux-arm64
+            agentswarm-linux-arm64-musl
             agentswarm-linux-x64
             agentswarm-linux-x64-baseline
+            agentswarm-linux-x64-baseline-musl
+            agentswarm-linux-x64-musl
             agentswarm-windows-arm64.exe
             agentswarm-windows-x64.exe
             agentswarm-windows-x64-baseline.exe
@@ -365,6 +380,37 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download platform release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --dir dist --clobber
+
+      - name: Pack platform npm packages
+        run: node scripts/package-platform-binaries.mjs dist platform-packages
+
+      - name: Publish platform npm packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find platform-packages -maxdepth 1 -name '*.tgz' -type f | sort)
+          if (( ${#packages[@]} != 12 )); then
+            echo "Expected 12 OpenSwarm platform packages, got ${#packages[@]}." >&2
+            exit 1
+          fi
+          for package in "${packages[@]}"; do
+            pkg_id="$(tar -xOf "$package" package/package.json | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.name+'@'+pkg.version)")"
+            if npm view "$pkg_id" version >/dev/null 2>&1; then
+              echo "Skipping $pkg_id; already published."
+              continue
+            fi
+            npm publish "$package" --access public --tag "$NPM_TAG"
+          done
 
       - name: Publish npm package
         run: npm publish --access public --tag "$NPM_TAG"

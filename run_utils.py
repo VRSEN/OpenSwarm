@@ -1,47 +1,12 @@
+import json
 import os
 import sys
+import site
 import subprocess
 import shutil
 import tempfile
+import platform as platform_module
 from pathlib import Path
-
-_PRODUCT_TUI_LOGO_LEFT = (
-    '["                                    ",'
-    '" ██████╗ ██████╗ ███████╗███╗   ██╗",'
-    '"██╔═══██╗██╔══██╗██╔════╝████╗  ██║",'
-    '"██║   ██║██████╔╝█████╗  ██╔██╗ ██║",'
-    '"██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║",'
-    '"╚██████╔╝██║     ███████╗██║ ╚████║",'
-    '" ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝"]'
-)
-_PRODUCT_TUI_LOGO_RIGHT = (
-    '["",'
-    '"███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗",'
-    '"██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║",'
-    '"███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║",'
-    '"╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║",'
-    '"███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║",'
-    '"╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
-)
-_PRODUCT_WORDMARK_LINES = (
-    '["",'
-    '" ██████╗ ██████╗ ███████╗███╗   ██╗ ███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗",'
-    '"██╔═══██╗██╔══██╗██╔════╝████╗  ██║ ██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║",'
-    '"██║   ██║██████╔╝█████╗  ██╔██╗ ██║ ███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║",'
-    '"██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║ ╚════██║██║███╗██║██╔══██╗██╔══██╗██║╚██╔╝██║",'
-    '"╚██████╔╝██║     ███████╗██║ ╚████║ ███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║",'
-    '" ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
-)
-_PRODUCT_ADDONS = (
-    '[{"id":"search","title":"Web Search","keys":["SEARCH_API_KEY"]},'
-    '{"id":"anthropic","title":"Anthropic Claude","keys":["ANTHROPIC_API_KEY"],"excludeProviders":["anthropic"]},'
-    '{"id":"composio","title":"Composio","keys":["COMPOSIO_API_KEY","COMPOSIO_USER_ID"]},'
-    '{"id":"google","title":"Google Gemini","keys":["GOOGLE_API_KEY"],"excludeProviders":["google"]},'
-    '{"id":"fal","title":"Fal.ai","keys":["FAL_KEY"]},'
-    '{"id":"pexels","title":"Pexels","keys":["PEXELS_API_KEY"]},'
-    '{"id":"pixabay","title":"Pixabay","keys":["PIXABAY_API_KEY"]},'
-    '{"id":"unsplash","title":"Unsplash","keys":["UNSPLASH_ACCESS_KEY"]}]'
-)
 
 
 def _openswarm_state_root() -> Path:
@@ -58,13 +23,224 @@ def _load_openswarm_dotenv(*, override: bool = False) -> bool:
     return bool(load_dotenv(dotenv_path=_openswarm_state_root() / ".env", override=override))
 
 
+def _product_env_from_config() -> dict[str, str]:
+    config = package = fallback = None
+    for root in (Path(__file__).resolve().parent, Path(sys.prefix), Path(site.USER_BASE)):
+        candidate_config = root / "openswarm.config.mjs"
+        candidate_fallback = root / "openswarm.product-env.json"
+        candidate_package = root / "package.json"
+        if not fallback and candidate_fallback.exists() and candidate_package.exists():
+            fallback = candidate_fallback
+            package = candidate_package
+        if candidate_config.exists() and candidate_package.exists():
+            config = candidate_config
+            package = candidate_package
+            break
+    node = shutil.which("node")
+    if node and config and package:
+        return _product_env_from_mjs(node, config, package)
+    if fallback and package:
+        return _product_env_from_json(fallback, package)
+    if not node and config and package:
+        raise RuntimeError("OpenSwarm product config requires Node.js or openswarm.product-env.json. Reinstall OpenSwarm through npm or npx.")
+    if not config and not fallback:
+        raise RuntimeError("OpenSwarm product config files are missing. Reinstall OpenSwarm through npm or npx.")
+    raise RuntimeError("OpenSwarm package metadata is missing. Reinstall OpenSwarm through npm or npx.")
+
+
+def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, str]:
+    script = (
+        "const fs=require('fs');"
+        "const {pathToFileURL}=require('url');"
+        "import(pathToFileURL(process.argv[1]).href).then((cfg)=>{"
+        "const pkg=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));"
+        "process.stdout.write(JSON.stringify(cfg.getProductEnv({stateRoot:process.argv[2],version:pkg.version})));"
+        "}).catch((err)=>{console.error(err&&err.stack||err);process.exit(1);});"
+    )
+    result = subprocess.run(
+        [node, "-e", script, str(config), str(_openswarm_state_root()), str(package)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        timeout=15,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"OpenSwarm product config failed to load: {result.stderr.strip()}")
+    return {key: str(value) for key, value in json.loads(result.stdout).items()}
+
+
+def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
+    try:
+        values = json.loads(fallback.read_text(encoding="utf-8"))
+        pkg = json.loads(package.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenSwarm product config fallback failed to load: {exc}") from exc
+    if not isinstance(values, dict) or not isinstance(pkg, dict) or not pkg.get("version"):
+        raise RuntimeError("OpenSwarm product config fallback is invalid. Reinstall OpenSwarm through npm or npx.")
+    env = {key: str(value) for key, value in values.items()}
+    env["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
+    env["AGENTSWARM_PRODUCT_VERSION"] = str(pkg["version"])
+    return env
+
+
 def _configure_product_env() -> None:
-    os.environ.setdefault("AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION", "true")
-    os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_LEFT", _PRODUCT_TUI_LOGO_LEFT)
-    os.environ.setdefault("AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT", _PRODUCT_TUI_LOGO_RIGHT)
-    os.environ.setdefault("AGENTSWARM_PRODUCT_WORDMARK_LINES", _PRODUCT_WORDMARK_LINES)
-    os.environ.setdefault("AGENTSWARM_PRODUCT_ADDONS", _PRODUCT_ADDONS)
-    os.environ["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
+    for key, value in _product_env_from_config().items():
+        if key == "AGENTSWARM_PRODUCT_STATE_ROOT":
+            os.environ[key] = value
+        else:
+            os.environ.setdefault(key, value)
+
+
+def _openswarm_package_names(platform: str, arch: str, *, musl: bool, baseline: bool) -> list[str]:
+    base = f"@vrsen/openswarm-cli-{platform}-{arch}"
+    if platform == "linux":
+        if arch == "x64":
+            if musl:
+                if baseline:
+                    return [f"{base}-baseline-musl", f"{base}-musl", f"{base}-baseline", base]
+                return [f"{base}-musl", f"{base}-baseline-musl", base, f"{base}-baseline"]
+            if baseline:
+                return [f"{base}-baseline", base, f"{base}-baseline-musl", f"{base}-musl"]
+            return [base, f"{base}-baseline", f"{base}-musl", f"{base}-baseline-musl"]
+        if musl:
+            return [f"{base}-musl", base]
+        return [base, f"{base}-musl"]
+
+    if arch == "x64":
+        if baseline:
+            return [f"{base}-baseline", base]
+        return [base, f"{base}-baseline"]
+
+    return [base]
+
+
+def _openswarm_platform() -> str:
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "darwin"
+    return "linux"
+
+
+def _openswarm_arch() -> str:
+    machine = platform_module.machine().lower()
+    if machine in {"arm64", "aarch64"}:
+        return "arm64"
+    return "x64"
+
+
+def _supports_avx2(platform: str, arch: str) -> bool:
+    if arch != "x64":
+        return False
+
+    if platform == "linux":
+        try:
+            return " avx2 " in f" {Path('/proc/cpuinfo').read_text(encoding='utf-8').lower()} "
+        except OSError:
+            return False
+
+    if platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.optional.avx2_0"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding="utf-8",
+                timeout=1.5,
+                check=False,
+            )
+        except OSError:
+            return False
+        return result.returncode == 0 and result.stdout.strip() == "1"
+
+    if platform == "windows":
+        cmd = (
+            '(Add-Type -MemberDefinition "[DllImport(""kernel32.dll"")] public static extern bool '
+            'IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 '
+            "-PassThru)::IsProcessorFeaturePresent(40)"
+        )
+        for exe in ("powershell.exe", "pwsh.exe", "pwsh", "powershell"):
+            try:
+                result = subprocess.run(
+                    [exe, "-NoProfile", "-NonInteractive", "-Command", cmd],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    encoding="utf-8",
+                    timeout=3,
+                    check=False,
+                )
+            except OSError:
+                continue
+            if result.returncode != 0:
+                continue
+            value = result.stdout.strip().lower()
+            if value in {"true", "1"}:
+                return True
+            if value in {"false", "0"}:
+                return False
+
+    return False
+
+
+def _is_musl() -> bool:
+    if sys.platform != "linux":
+        return False
+    if Path("/etc/alpine-release").exists():
+        return True
+    try:
+        result = subprocess.run(
+            ["ldd", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            timeout=1.5,
+            check=False,
+        )
+    except OSError:
+        return False
+    return "musl" in f"{result.stdout}{result.stderr}".lower()
+
+
+def _openswarm_platform_packages() -> list[tuple[str, str]]:
+    platform = _openswarm_platform()
+    arch = _openswarm_arch()
+    baseline = arch == "x64" and not _supports_avx2(platform, arch)
+    binary = "agentswarm.exe" if platform == "windows" else "agentswarm"
+    names = _openswarm_package_names(platform, arch, musl=_is_musl(), baseline=baseline)
+    return [(name, binary) for name in names]
+
+
+def _node_module_starts(repo: Path | None) -> list[Path]:
+    roots = [Path(__file__).resolve().parent]
+    if repo is not None:
+        roots.insert(0, repo.resolve())
+
+    starts = []
+    seen: set[Path] = set()
+    for root in roots:
+        path = root.resolve()
+        if path in seen:
+            continue
+        seen.add(path)
+        starts.append(path)
+    return starts
+
+
+def _resolve_openswarm_tui_binary(repo: Path | None = None) -> Path | None:
+    for name, binary in _openswarm_platform_packages():
+        scope, package = name.split("/", 1)
+        for start in _node_module_starts(repo):
+            current = start
+            while True:
+                candidate = current / "node_modules" / scope / package / "bin" / binary
+                if candidate.is_file():
+                    return candidate
+                parent = current.parent
+                if parent == current:
+                    break
+                current = parent
+    return None
 
 
 def _preload_agentswarm_bin(repo: Path | None = None) -> None:
@@ -108,73 +284,9 @@ def _preload_agentswarm_bin(repo: Path | None = None) -> None:
             os.environ["AGENTSWARM_BIN"] = raw
             return
 
-
-def _resolve_bin_name() -> str:
-    """Return the platform+arch-specific TUI binary filename."""
-    import platform
-    machine = platform.machine().lower()
-    arch = "arm64" if machine in ("arm64", "aarch64") else "x64"
-    if sys.platform == "win32":
-        return f"agentswarm-windows-{arch}.exe"
-    if sys.platform == "darwin":
-        return f"agentswarm-darwin-{arch}"
-    return f"agentswarm-linux-{arch}"
-
-
-def _resolve_bin_names() -> list[str]:
-    name = _resolve_bin_name()
-    names = [name]
-    stem, suffix = (name[:-4], ".exe") if name.endswith(".exe") else (name, "")
-    if stem.endswith("-x64"):
-        names.append(f"{stem}-baseline{suffix}")
-    return names
-
-
-def _is_tui_binary_runnable(path: Path) -> bool:
-    try:
-        stat = path.stat()
-        if not stat.st_size:
-            return False
-        if sys.platform != "win32" and not os.access(path, os.X_OK):
-            path.chmod(0o755)
-        result = subprocess.run(
-            [str(path), "--version"],
-            env={**os.environ, "AGENTSWARM_LAUNCHER": "0"},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=15,
-        )
-    except Exception:
-        return False
-    return result.returncode == 0
-
-
-def _download_tui_binary(repo: Path, name: str) -> Path | None:
-    import urllib.request
-
-    path = repo / name
-    url = f"https://github.com/VRSEN/OpenSwarm/releases/latest/download/{name}"
-    print("Downloading OpenSwarm TUI, please wait…\n")
-    try:
-        urllib.request.urlretrieve(url, str(path))
-        if sys.platform != "win32":
-            path.chmod(0o755)
-        print("\nDone.\n")
-    except Exception:
-        path.unlink(missing_ok=True)
-        return None
-    return path
-
-
-def _resolve_tui_binary(repo: Path, download: bool) -> Path | None:
-    for name in _resolve_bin_names():
-        path = repo / name
-        if not path.exists() and download:
-            path = _download_tui_binary(repo, name) or path
-        if path.exists() and _is_tui_binary_runnable(path):
-            return path
-    return None
+    binary = _resolve_openswarm_tui_binary(repo)
+    if binary:
+        os.environ["AGENTSWARM_BIN"] = str(binary)
 
 
 _REQUIRED_SLIDES_NODE_PACKAGES = (
@@ -350,13 +462,8 @@ def _bootstrap() -> None:
             "npm was not found; cannot install Slides Agent Node.js dependencies"
         )
 
-    # Download the OpenSwarm TUI binary from GitHub Releases if missing.
-    if not os.getenv("AGENTSWARM_BIN"):
-        _bin_path = _resolve_tui_binary(_repo, download=True)
-        if _bin_path:
-            os.environ["AGENTSWARM_BIN"] = str(_bin_path)
-        else:
-            print("Warning: Could not download a runnable OpenSwarm TUI. The terminal UI will use the default.\n")
+    _preload_agentswarm_bin(_repo)
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -443,12 +550,6 @@ def main() -> None:
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     _configure_product_env()
-
-    if not os.getenv("AGENTSWARM_BIN"):
-        _repo = Path(__file__).resolve().parent
-        local_exe = _resolve_tui_binary(_repo, download=True)
-        if local_exe:
-            os.environ["AGENTSWARM_BIN"] = str(local_exe)
 
     # Disable OpenAI Agents SDK tracing for terminal demo runs.
     try:
