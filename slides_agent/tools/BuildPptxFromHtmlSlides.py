@@ -9,6 +9,7 @@ from typing import List, Optional
 from agency_swarm.tools import BaseTool
 from pydantic import Field
 
+from run_utils import _openswarm_product_roots
 from .slide_file_utils import get_project_dir, next_pptx_version
 
 RUNNER_JS = Path(__file__).parent / "html2pptx_runner.js"
@@ -81,10 +82,11 @@ class BuildPptxFromHtmlSlides(BaseTool):
         if not self._check_node():
             return "Error: Node.js not found. Please install Node.js."
 
-        node_modules = Path(__file__).parent.parent.parent / "node_modules"
+        root = next(iter(_openswarm_product_roots()), Path(__file__).parent.parent.parent)
+        node_modules = root / "node_modules"
         if not node_modules.exists():
             return (
-                "Error: node_modules not found. Please run 'npm install' in the project root.\n"
+                "Error: node_modules not found. Please run 'npm install' in the OpenSwarm product root.\n"
                 f"Expected location: {node_modules}"
             )
 
@@ -107,7 +109,8 @@ class BuildPptxFromHtmlSlides(BaseTool):
                 "capture_output": True,
                 "text": True,
                 "timeout": 300,
-                "cwd": str(Path(__file__).parent.parent.parent),
+                "cwd": str(root),
+                "env": {**os.environ, "OPENSWARM_PRODUCT_ROOT": str(root)},
             }
             if os.name == "nt":
                 kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW

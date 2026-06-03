@@ -27,14 +27,11 @@
 
 'use strict';
 
-// Isolate Node.js Playwright browsers from Python Playwright to prevent
-// npm's cleanup from deleting Python's browser binaries.
 const path   = require('path');
-if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  // Prefer a project-local cache in the current working directory.
-  // (The launcher creates/runs projects from ./openswarm, so this becomes ./openswarm/.playwright-browsers.)
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(process.cwd(), '.playwright-browsers');
-}
+const { createRequire } = require('module');
+const productRoot = path.resolve(process.env.OPENSWARM_PRODUCT_ROOT || path.resolve(__dirname, '..', '..'));
+const productRequire = createRequire(path.join(productRoot, 'package.json'));
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(process.cwd(), '.playwright-browsers');
 const fs     = require('fs');
 const os     = require('os');
 const crypto = require('crypto');
@@ -660,9 +657,7 @@ async function main() {
         process.exit(1);
     }
 
-    const domToPptxBundle = path.resolve(
-        __dirname, '..', '..', 'node_modules', 'dom-to-pptx', 'dist', 'dom-to-pptx.bundle.js'
-    );
+    const domToPptxBundle = path.join(productRoot, 'node_modules', 'dom-to-pptx', 'dist', 'dom-to-pptx.bundle.js');
     if (!fs.existsSync(domToPptxBundle)) {
         console.error(`dom-to-pptx bundle not found at: ${domToPptxBundle}`);
         console.error('Run: npm install dom-to-pptx');
@@ -707,7 +702,7 @@ async function main() {
 
     fs.writeFileSync(orchFile, buildOrchestratorHtml(slides, layout, domToPptxBundle), 'utf8');
 
-    const { chromium } = require('playwright');
+    const { chromium } = productRequire('playwright');
     const browser = await chromium.launch();
 
     try {

@@ -71,3 +71,4 @@ exclude = ["agentswarm-cli*", "venv*", ".venv*", ".agency_swarm*", "node_modules
 
 [tool.setuptools.data-files]
 "." = ["openswarm.config.mjs", "openswarm.product-env.json", "package.json"]
+"patches" = ["patches/dom-to-pptx+1.1.5.patch"]

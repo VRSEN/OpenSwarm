@@ -23,9 +23,18 @@ def _load_openswarm_dotenv(*, override: bool = False) -> bool:
     return bool(load_dotenv(dotenv_path=_openswarm_state_root() / ".env", override=override))
 
 
+def _product_root_candidates() -> list[Path]:
+    roots = (Path(__file__).resolve().parent, Path(sys.prefix), Path(site.USER_BASE))
+    return list(dict.fromkeys(root.resolve() for root in roots))
+
+
+def _openswarm_product_roots() -> list[Path]:
+    return [root for root in _product_root_candidates() if (root / "package.json").exists() and any((root / name).exists() for name in ("openswarm.config.mjs", "openswarm.product-env.json"))]
+
+
 def _product_env_from_config() -> dict[str, str]:
     config = package = fallback = None
-    for root in (Path(__file__).resolve().parent, Path(sys.prefix), Path(site.USER_BASE)):
+    for root in _product_root_candidates():
         candidate_config = root / "openswarm.config.mjs"
         candidate_fallback = root / "openswarm.product-env.json"
         candidate_package = root / "package.json"
@@ -212,19 +221,9 @@ def _openswarm_platform_packages() -> list[tuple[str, str]]:
 
 
 def _node_module_starts(repo: Path | None) -> list[Path]:
-    roots = [Path(__file__).resolve().parent]
-    if repo is not None:
-        roots.insert(0, repo.resolve())
-
-    starts = []
-    seen: set[Path] = set()
-    for root in roots:
-        path = root.resolve()
-        if path in seen:
-            continue
-        seen.add(path)
-        starts.append(path)
-    return starts
+    roots = ([] if repo is None else [repo]) + _openswarm_product_roots()
+    roots.append(Path(__file__).resolve().parent)
+    return list(dict.fromkeys(root.resolve() for root in roots))
 
 
 def _resolve_openswarm_tui_binary(repo: Path | None = None) -> Path | None:
@@ -381,7 +380,8 @@ def _uv_env() -> dict[str, str]:
 # __main__ guard below — never at module level, so `from run_utils import _bootstrap`
 # is safe to call from outside the venv.
 def _bootstrap() -> None:
-    _repo = Path(__file__).resolve().parent
+    _module = Path(__file__).resolve().parent
+    _repo = next(iter(_openswarm_product_roots()), _module)
     # Ensure deps are present.
     try:
         import dotenv        # noqa: F401
@@ -392,7 +392,7 @@ def _bootstrap() -> None:
         print("Installing dependencies, please wait…\n")
         if not shutil.which("uv"):
             subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
-        uv_cmd = ["uv", "pip", "install", "--system", "--python", sys.executable, str(_repo)]
+        uv_cmd = ["uv", "pip", "install", "--system", "--python", sys.executable, str(_module)]
         if sys.platform != "win32":
             uv_cmd.append("--break-system-packages")
         subprocess.check_call(uv_cmd, env=_uv_env())
