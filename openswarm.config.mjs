@@ -13,7 +13,7 @@ export const product = {
   mdnsDomain: "openswarm.local",
   starterRepo: "VRSEN/OpenSwarm",
   starterFolder: "openswarm",
-  entryFiles: "swarm.py",
+  entryFiles: "swarm.py,agency.py",
 }
 
 export const productTuiLogoLeft = [
