@@ -517,8 +517,8 @@ def main() -> int:
             ),
             encoding="utf-8",
         )
-        create_local_openswarm_project(package_dir, generic_dir)
-        plain = run_tui_smoke(launcher, package_dir, generic_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
+        project_dir = create_local_openswarm_project(package_dir, generic_dir)
+        plain = run_tui_smoke(launcher, package_dir, project_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
         if "Agency Swarm Default" not in plain:
             raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
         if args.check in {"agents", "all"}:
