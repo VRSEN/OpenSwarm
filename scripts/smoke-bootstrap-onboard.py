@@ -59,14 +59,6 @@ def smoke_swarm_import_skips_bootstrap() -> None:
             set_tracing_export_api_key=lambda _value: order.append("agents"),
         ),
         "patches": patches,
-        "patches.patch_agency_swarm_dual_comms": module(
-            "patches.patch_agency_swarm_dual_comms",
-            apply_dual_comms_patch=lambda: order.append("patch"),
-        ),
-        "patches.patch_file_attachment_refs": module(
-            "patches.patch_file_attachment_refs",
-            apply_file_attachment_reference_patch=lambda: order.append("patch"),
-        ),
         "patches.patch_ipython_interpreter_composio": module(
             "patches.patch_ipython_interpreter_composio",
             apply_ipython_composio_context_patch=lambda: order.append("patch"),
