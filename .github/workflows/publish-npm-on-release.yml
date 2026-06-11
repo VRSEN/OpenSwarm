@@ -128,7 +128,7 @@ jobs:
               echo "Skipping $pkg_id; already published."
               continue
             fi
-            npm publish "$package" --access public --tag "$NPM_TAG"
+            npm publish "./$package" --access public --tag "$NPM_TAG"
           done
 
       - name: Publish npm package
