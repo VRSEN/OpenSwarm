@@ -119,8 +119,8 @@ def install_openswarm_tui_binary(package_dir: pathlib.Path, binary: pathlib.Path
     return target
 
 
-def create_local_openswarm_project(package_dir: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
-    target = root / "openswarm"
+def create_local_openswarm_project(package_dir: pathlib.Path, root: pathlib.Path, name: str = "openswarm") -> pathlib.Path:
+    target = root / name
     ignore = shutil.ignore_patterns(
         ".git",
         ".venv",
@@ -174,6 +174,14 @@ def write(fd: int, text: str) -> None:
 
 def compact(text: str) -> str:
     return re.sub(r"\s+", "", text)
+
+
+def is_run_mode_ready(plain: str) -> bool:
+    packed = compact(plain).lower()
+    has_current_footer = "run·swarmdefault" in packed or "runswarmdefault" in packed
+    has_command_ui = "tabagents" in packed and "ctrl+pcommands" in packed
+    has_legacy_footer = "agencyswarmdefault" in packed
+    return has_command_ui and (has_current_footer or has_legacy_footer)
 
 
 def terminate(process: subprocess.Popen[bytes]) -> None:
@@ -306,7 +314,7 @@ def run_tui_smoke(
                 write(master_fd, "\r")
                 sent_confirm = True
 
-            run_mode_ready = "AgencySwarmDefault" in compact_plain and "ctrl+pcommands" in compact_plain
+            run_mode_ready = is_run_mode_ready(plain)
 
             if check in {"agents", "all"} and not sent_agents_command and run_mode_ready:
                 write(master_fd, "/agents\r")
@@ -398,7 +406,9 @@ def run_tui_smoke(
             if selected_models_command and not verified_models:
                 models_picker = compact(plain[models_picker_start:]).lower()
                 if "selectmodel" in models_picker and (
-                    "agencyswarmdefault" in models_picker or "manageproviderauth" in models_picker
+                    "swarmdefault" in models_picker
+                    or "agencyswarmdefault" in models_picker
+                    or "manageproviderauth" in models_picker
                 ):
                     verified_models = True
                     write(master_fd, "\x1b")
@@ -479,6 +489,7 @@ def main() -> int:
         raise RuntimeError("OPENAI_API_KEY is required for the live prompt smoke test")
     auth_key = api_key or "dummy-openai-key-for-agent-roster-smoke"
     root = pathlib.Path(tempfile.mkdtemp(prefix="openswarm-run-mode-smoke-"))
+    state_root = root / "openswarm-state"
     env = os.environ.copy()
     env.update(
         {
@@ -491,6 +502,7 @@ def main() -> int:
             "XDG_CONFIG_HOME": str(root / "xdg-config"),
             "XDG_CACHE_HOME": str(root / "xdg-cache"),
             "XDG_STATE_HOME": str(root / "xdg-state"),
+            "OPENSWARM_STATE_ROOT": str(state_root),
             "OPENCODE_DISABLE_AUTOUPDATE": "true",
             "OPENCODE_DISABLE_MODELS_FETCH": "true",
         }
@@ -517,10 +529,11 @@ def main() -> int:
             ),
             encoding="utf-8",
         )
-        project_dir = create_local_openswarm_project(package_dir, generic_dir)
+        state_root.mkdir(parents=True, exist_ok=True)
+        project_dir = create_local_openswarm_project(package_dir, state_root, "project")
         plain = run_tui_smoke(launcher, package_dir, project_dir, root, env, args.check, args.prompt, args.expect, args.timeout)
-        if "Agency Swarm Default" not in plain:
-            raise RuntimeError("Smoke response was seen, but Agency Swarm Run mode was not detected")
+        if not is_run_mode_ready(plain):
+            raise RuntimeError("Smoke response was seen, but OpenSwarm Run mode and command UI were not detected")
         if args.check in {"agents", "all"}:
             print(f"OpenSwarm /agents smoke passed with {EXPECTED_AGENT_COUNT} agents visible")
         if args.check in {"models", "all"}:

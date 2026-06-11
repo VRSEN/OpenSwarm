@@ -1,6 +1,6 @@
 {
     "name": "@vrsen/openswarm",
-    "version": "1.0.1-rc.7",
+    "version": "1.0.1-rc.8",
     "description": "An open-source multi-agent AI team built on Agency Swarm",
     "license": "MIT",
     "publishConfig": {
@@ -32,13 +32,16 @@
         "patches/",
         "pyproject.toml",
         "package.json",
-        "package-lock.json"
+        "package-lock.json",
+        "!**/__pycache__/**",
+        "!**/*.pyc",
+        "!node_modules/**"
     ],
     "scripts": {
         "postinstall": "node -e \"const fs=require('fs');const path=require('path');const cp=require('child_process');const pkg=__dirname;const patchTarget=path.join(pkg,'node_modules','dom-to-pptx');const patchCli=path.join(pkg,'node_modules','patch-package','index.js');if(fs.existsSync(patchTarget)&&fs.existsSync(patchCli)){cp.execFileSync(process.execPath,[patchCli],{cwd:pkg,stdio:'inherit'});}try{fs.chmodSync(path.join(pkg,'bin','openswarm'),0o755)}catch(e){}\""
     },
     "dependencies": {
-        "@vrsen/agentswarm": "1.4.37-rc.1",
+        "@vrsen/agentswarm": "1.4.38",
         "dom-to-pptx": "1.1.5",
         "patch-package": "^8.0.1",
         "playwright": "^1.59.1",
@@ -49,18 +52,18 @@
         "sharp": "^0.33.0"
     },
     "optionalDependencies": {
-        "@vrsen/openswarm-cli-darwin-arm64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-darwin-x64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-darwin-x64-baseline": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-arm64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-arm64-musl": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-x64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-x64-baseline": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-x64-baseline-musl": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-linux-x64-musl": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-windows-arm64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-windows-x64": "1.0.1-rc.7",
-        "@vrsen/openswarm-cli-windows-x64-baseline": "1.0.1-rc.7"
+        "@vrsen/openswarm-cli-darwin-arm64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-darwin-x64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-darwin-x64-baseline": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-arm64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-arm64-musl": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-x64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-x64-baseline": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-x64-baseline-musl": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-linux-x64-musl": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-windows-arm64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-windows-x64": "1.0.1-rc.8",
+        "@vrsen/openswarm-cli-windows-x64-baseline": "1.0.1-rc.8"
     },
     "engines": {
         "node": ">=18.0.0",

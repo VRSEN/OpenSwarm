@@ -14,20 +14,64 @@ from __future__ import annotations
 from typing import Any
 
 
+def _validate_communication_tool_class(tool_class: type, send_message_class: type, handoff_class: type) -> None:
+    if not issubclass(tool_class, (send_message_class, handoff_class)):
+        raise TypeError(
+            f"Invalid communication tool class: {tool_class.__name__}. "
+            "Expected a SendMessage or Handoff subclass."
+        )
+
+
 def _add_tool_class_for_pair(
     mapping: dict[tuple[str, str], list[type]],
+    default_tool_pairs: set[tuple[str, str]],
     pair_key: tuple[str, str],
     tool_class: type | None,
+    send_message_class: type,
+    handoff_class: type,
 ) -> None:
     if tool_class is None:
         return
+    _validate_communication_tool_class(tool_class, send_message_class, handoff_class)
+    if pair_key in default_tool_pairs and issubclass(tool_class, send_message_class):
+        raise ValueError(
+            f"Duplicate communication tool class detected for {pair_key[0]} -> {pair_key[1]}: "
+            f"{tool_class.__name__}. Each SendMessage tool for a pair can only be defined once."
+        )
     classes = mapping.setdefault(pair_key, [])
+    if issubclass(tool_class, send_message_class):
+        for existing_tool_class in classes:
+            if issubclass(existing_tool_class, send_message_class):
+                raise ValueError(
+                    f"Duplicate communication tool class detected for {pair_key[0]} -> {pair_key[1]}: "
+                    f"{tool_class.__name__}. Each SendMessage tool for a pair can only be defined once."
+                )
     if tool_class in classes:
         raise ValueError(
             f"Duplicate communication tool class detected for {pair_key[0]} -> {pair_key[1]}: "
             f"{tool_class.__name__}. Each tool class for a pair can only be defined once."
         )
     classes.append(tool_class)
+
+
+def _add_default_tool_pair(
+    custom_mapping: dict[tuple[str, str], list[type]],
+    default_tool_pairs: set[tuple[str, str]],
+    pair_key: tuple[str, str],
+    send_message_class: type,
+) -> None:
+    if pair_key in default_tool_pairs:
+        raise ValueError(
+            f"Duplicate communication flow detected: {pair_key[0]} -> {pair_key[1]}. "
+            "Each default agent-to-agent communication can only be defined once."
+        )
+    for tool_class in custom_mapping.get(pair_key, []):
+        if issubclass(tool_class, send_message_class):
+            raise ValueError(
+                f"Duplicate communication tool class detected for {pair_key[0]} -> {pair_key[1]}: "
+                f"{tool_class.__name__}. Each SendMessage tool for a pair can only be defined once."
+            )
+    default_tool_pairs.add(pair_key)
 
 
 def apply_dual_comms_patch() -> None:
@@ -44,9 +88,10 @@ def apply_dual_comms_patch() -> None:
 
     def parse_agent_flows_patched(
         agency: Any, communication_flows: list[Any]
-    ) -> tuple[list[tuple[Agent, Agent]], dict[tuple[str, str], list[type]]]:
+    ) -> tuple[list[tuple[Agent, Agent]], dict[tuple[str, str], list[type]], set[tuple[str, str]]]:
         basic_flows: list[tuple[Agent, Agent]] = []
         tool_class_mapping: dict[tuple[str, str], list[type]] = {}
+        default_tool_pairs: set[tuple[str, str]] = set()
         seen_flows: set[tuple[str, str]] = set()
 
         chain_flows = AgentFlow.get_and_clear_chain_flows()
@@ -61,13 +106,10 @@ def apply_dual_comms_patch() -> None:
 
                 if isinstance(first, Agent) and isinstance(second, Agent):
                     flow_key = (first.name, second.name)
-                    if flow_key in seen_flows:
-                        raise ValueError(
-                            f"Duplicate communication flow detected: {first.name} -> {second.name}. "
-                            "Each agent-to-agent communication can only be defined once."
-                        )
-                    seen_flows.add(flow_key)
-                    basic_flows.append((first, second))
+                    if flow_key not in seen_flows:
+                        seen_flows.add(flow_key)
+                        basic_flows.append((first, second))
+                    _add_default_tool_pair(tool_class_mapping, default_tool_pairs, flow_key, SendMessage)
 
                 elif isinstance(first, AgentFlow) and (isinstance(second, type) or second is None):
                     tool_class = second
@@ -84,12 +126,19 @@ def apply_dual_comms_patch() -> None:
                             seen_flows.add(flow_key)
                             basic_flows.append((sender, receiver))
                         elif tool_class is None:
-                            raise ValueError(
-                                f"Duplicate communication flow detected: {sender.name} -> {receiver.name}. "
-                                "Each agent-to-agent communication can only be defined once unless adding "
-                                "a distinct tool class."
+                            _add_default_tool_pair(tool_class_mapping, default_tool_pairs, flow_key, SendMessage)
+                            continue
+                        if tool_class is None:
+                            _add_default_tool_pair(tool_class_mapping, default_tool_pairs, flow_key, SendMessage)
+                        else:
+                            _add_tool_class_for_pair(
+                                tool_class_mapping,
+                                default_tool_pairs,
+                                flow_key,
+                                tool_class,
+                                SendMessage,
+                                Handoff,
                             )
-                        _add_tool_class_for_pair(tool_class_mapping, flow_key, tool_class)
                 else:
                     raise TypeError(
                         f"Invalid communication flow entry: {flow_entry}. "
@@ -105,6 +154,8 @@ def apply_dual_comms_patch() -> None:
                 # The agency factory reconstructs flows from _communication_tool_classes,
                 # which stores lists of types per pair. Accept both a single class and a list.
                 tool_classes = tool_class if isinstance(tool_class, (list, tuple)) else [tool_class]
+                if not tool_classes:
+                    raise ValueError("Communication flow tool class list cannot be empty.")
                 for tc in tool_classes:
                     if not isinstance(tc, type):
                         raise TypeError(f"Invalid tool class in communication flow: {tc}. Expected a class type.")
@@ -115,12 +166,12 @@ def apply_dual_comms_patch() -> None:
                     basic_flows.append((sender, receiver))
 
                 for tc in tool_classes:
-                    _add_tool_class_for_pair(tool_class_mapping, flow_key, tc)
+                    _add_tool_class_for_pair(tool_class_mapping, default_tool_pairs, flow_key, tc, SendMessage, Handoff)
 
             else:
                 raise ValueError(f"Invalid communication flow entry: {flow_entry}. Expected 2 or 3 elements.")
 
-        return basic_flows, tool_class_mapping
+        return basic_flows, tool_class_mapping, default_tool_pairs
 
     def configure_agents_patched(agency: Any, defined_communication_flows: list[tuple[Agent, Agent]]) -> None:
         setup_mod.logger.info("Configuring agents...")
@@ -137,15 +188,26 @@ def apply_dual_comms_patch() -> None:
             allowed_recipients = communication_map.get(agent_name, [])
 
             if allowed_recipients:
+                if not agent_instance.supports_outbound_communication:
+                    joined = ", ".join(allowed_recipients)
+                    raise ValueError(
+                        f"Agent '{agent_name}' cannot be the sender in communication_flows. "
+                        f"It can receive delegated work, but it cannot delegate to: {joined}."
+                    )
                 setup_mod.logger.debug(f"Agent '{agent_name}' can send messages to: {allowed_recipients}")
                 for recipient_name in allowed_recipients:
                     recipient_agent = agency.agents[recipient_name]
                     pair_key = (agent_name, recipient_name)
                     configured = agency._communication_tool_classes.get(pair_key, [])
-                    tool_classes = list(configured) if configured else [agency.send_message_tool_class or SendMessage]
+                    tool_classes: list[type] = []
+                    if pair_key in agency._default_communication_tool_pairs:
+                        tool_classes.append(agency.send_message_tool_class or SendMessage)
+                    tool_classes.extend(configured)
+                    if not tool_classes:
+                        tool_classes.append(agency.send_message_tool_class or SendMessage)
 
-                    try:
-                        for effective_tool_class in tool_classes:
+                    for effective_tool_class in tool_classes:
+                        try:
                             if isinstance(effective_tool_class, Handoff) or (
                                 isinstance(effective_tool_class, type) and issubclass(effective_tool_class, Handoff)
                             ):
@@ -162,6 +224,7 @@ def apply_dual_comms_patch() -> None:
                                     setup_mod._warned_deprecated_send_message_handoff = True
 
                                 handoff_instance = effective_tool_class().create_handoff(recipient_agent=recipient_agent)
+                                handoff_instance._agency_swarm_tool_class = effective_tool_class
                                 runtime_state.handoffs.append(handoff_instance)
                                 setup_mod.logger.debug(f"Added Handoff for {agent_name} -> {recipient_name}")
                             else:
@@ -174,11 +237,11 @@ def apply_dual_comms_patch() -> None:
                                     send_message_tool_class=chosen_tool_class,
                                     runtime_state=runtime_state,
                                 )
-                    except Exception as e:
-                        setup_mod.logger.error(
-                            f"Error registering subagent '{recipient_name}' for sender '{agent_name}': {e}",
-                            exc_info=True,
-                        )
+                        except Exception as e:
+                            setup_mod.logger.error(
+                                f"Error registering subagent '{recipient_name}' for sender '{agent_name}': {e}",
+                                exc_info=True,
+                            )
             else:
                 setup_mod.logger.debug(f"Agent '{agent_name}' has no explicitly defined outgoing communication paths.")
 
