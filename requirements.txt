@@ -1,4 +1,4 @@
-agency-swarm[fastapi,jupyter,litellm]>=1.10.0
+agency-swarm[fastapi,jupyter,litellm]>=1.10.1
 questionary>=2.0.0
 fastapi
 uvicorn
