@@ -6,7 +6,7 @@ license = { text = "MIT" }
 keywords = ["agency-swarm", "openai", "multi-agent", "open-source", "openswarm"]
 requires-python = ">=3.12"
 dependencies = [
-    "agency-swarm[fastapi,jupyter,litellm]>=1.9.8",
+    "agency-swarm[fastapi,jupyter,litellm]>=1.10.0",
     "questionary>=2.0.0",
     "python-dotenv",
     "rich",
