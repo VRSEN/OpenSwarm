@@ -137,6 +137,30 @@ def smoke_onboard_env_writes() -> None:
     if missing:
         raise RuntimeError(f"onboarding did not write expected .env values: {missing}")
 
+    provider = next(item for item in onboard.PROVIDERS if item["name"] == "OpenRouter")
+    with tempfile.TemporaryDirectory(prefix="openswarm-onboard-openrouter-smoke-") as tmp:
+        env = Path(tmp) / ".env"
+        sink = io.StringIO()
+        with (
+            patch.object(onboard, "ENV_PATH", env),
+            patch.object(onboard, "console", Console(file=sink, force_terminal=False)),
+            patch.object(onboard, "_ask_select", lambda _message, _choices: provider),
+            patch.object(onboard, "_ask_checkbox", lambda _message, _choices: []),
+            patch.object(onboard, "_ask_secret", lambda _label, _url: "sk-or-test"),
+            patch.object(onboard, "_ask_confirm", lambda _message, default=True: default),
+        ):
+            onboard.run_onboarding()
+
+        values = onboard.dotenv_values(str(env))
+
+    expected = {
+        "OPENROUTER_API_KEY": "sk-or-test",
+        "DEFAULT_MODEL": "litellm/openrouter/openai/gpt-5.2",
+    }
+    missing = {key: value for key, value in expected.items() if values.get(key) != value}
+    if missing:
+        raise RuntimeError(f"OpenRouter onboarding did not write expected .env values: {missing}")
+
 
 def smoke_product_state_root_env() -> None:
     sys.path.insert(0, str(ROOT))
@@ -187,6 +211,7 @@ def smoke_product_state_root_env() -> None:
                 if {addon.get("id") for addon in addons} != {
                     "search",
                     "anthropic",
+                    "openrouter",
                     "composio",
                     "google",
                     "fal",

@@ -65,6 +65,7 @@ function assertProductAddons(env) {
   assert.deepEqual(addons, [
     { id: 'search', title: 'Web Search', keys: ['SEARCH_API_KEY'] },
     { id: 'anthropic', title: 'Anthropic Claude', keys: ['ANTHROPIC_API_KEY'], excludeProviders: ['anthropic'] },
+    { id: 'openrouter', title: 'OpenRouter', keys: ['OPENROUTER_API_KEY'], excludeProviders: ['openrouter'] },
     { id: 'composio', title: 'Composio', keys: ['COMPOSIO_API_KEY', 'COMPOSIO_USER_ID'] },
     { id: 'google', title: 'Google Gemini', keys: ['GOOGLE_API_KEY'], excludeProviders: ['google'] },
     { id: 'fal', title: 'Fal.ai', keys: ['FAL_KEY'] },

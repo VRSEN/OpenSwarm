@@ -101,11 +101,12 @@ The setup wizard walks you through everything, but you'll need at least one of t
 
 - `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
 - `ANTHROPIC_API_KEY` - For Claude models
+- `GOOGLE_API_KEY` - For Gemini models, Gemini image generation, and Veo video
+- `OPENROUTER_API_KEY` - For OpenRouter-routed models
 
 **Optional superpowers:**
 
 - `COMPOSIO_API_KEY` - Unlock 10,000+ integrations (Gmail, Slack, GitHub, etc.)
-- `GOOGLE_API_KEY` - Gemini image generation + Veo video
 - `FAL_KEY` - Advanced video editing and effects
 - `SEARCH_API_KEY` - Web search for research agent
 

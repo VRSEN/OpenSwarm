@@ -74,6 +74,12 @@ PROVIDERS = [
         "default_model": "litellm/gemini/gemini-3-flash",
         "url":          "https://aistudio.google.com/app/apikey",
     },
+    {
+        "name":         "OpenRouter",
+        "env_key":      "OPENROUTER_API_KEY",
+        "default_model": "litellm/openrouter/openai/gpt-5.2",
+        "url":          "https://openrouter.ai/settings/keys",
+    },
 ]
 
 # ── add-on definitions ────────────────────────────────────────────────────────
@@ -98,6 +104,16 @@ ADD_ONS = [
              "url": "https://console.anthropic.com/settings/keys"},
         ],
         "exclude_for": ["Anthropic"],
+    },
+    {
+        "id":          "openrouter",
+        "name":        "OpenRouter  —  one key for many model providers",
+        "description": "Route models through OpenRouter with a single key",
+        "keys": [
+            {"env": "OPENROUTER_API_KEY", "label": "OpenRouter API key",
+             "url": "https://openrouter.ai/settings/keys"},
+        ],
+        "exclude_for": ["OpenRouter"],
     },
     {
         "id":          "composio",
