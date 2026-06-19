@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import mimetypes
-import os
 import re
 import tempfile
 import threading
@@ -17,13 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agency_swarm import Agent, ModelSettings, Reasoning
+from agency_swarm import Agent
 from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_image_from_path
 from agents.extensions.models.litellm_model import LitellmModel
-from openai import AsyncOpenAI
 from pydantic import Field
 from run_utils import _load_openswarm_dotenv
 
+from .internal_model import make_internal_model, make_internal_model_settings
 from .slide_file_utils import get_project_dir
 from .slide_html_utils import (
     ensure_full_html,
@@ -219,23 +218,7 @@ def _embed_local_images_as_base64(html: str, project_dir: Path) -> str:
     return html
 
 
-_HTML_WRITER_MODEL_CLAUDE = "anthropic/claude-sonnet-4-6"
-_HTML_WRITER_MODEL_OAI = "gpt-5.3-codex"
 _HTML_WRITER_MAX_ATTEMPTS = 3
-
-
-def _get_caller_openai_client(tool) -> "AsyncOpenAI | None":
-    ctx = getattr(tool, "_context", None)
-    master = getattr(ctx, "context", None)
-    agent_name = getattr(master, "current_agent_name", None)
-    agents = getattr(master, "agents", {})
-    agent = agents.get(agent_name) if agent_name else None
-    model = getattr(agent, "model", None)
-    for attr in ("_client", "openai_client", "client"):
-        maybe = getattr(model, attr, None)
-        if isinstance(maybe, AsyncOpenAI):
-            return maybe
-    return None
 
 
 class _CodexResponsesModel:
@@ -251,7 +234,11 @@ class _CodexResponsesModel:
 
             class _Impl(OpenAIResponsesModel):
                 async def _fetch_response(self, system_instructions, input, model_settings, *args, **kwargs):
-                    model_settings = replace(model_settings, truncation=None)
+                    model_settings = replace(
+                        model_settings,
+                        truncation=None,
+                        verbosity=None,
+                    )
                     return await super()._fetch_response(system_instructions, input, model_settings, *args, **kwargs)
 
             cls._cls = _Impl
@@ -296,40 +283,27 @@ def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one ModifySlide call.
 
     Model priority:
-    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best HTML quality)
-    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
-    3. AsyncOpenAI() default (env vars)
+    1. Calling agent's selected model
+    2. DEFAULT_MODEL from the OpenSwarm environment
+    3. OpenSwarm's standard OpenAI fallback
 
     Returns (agent, is_codex).
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    is_codex = False
-    if anthropic_key:
-        model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
-    else:
-        from agents import OpenAIResponsesModel
-        from openai import AsyncOpenAI
-        caller_client = tool and _get_caller_openai_client(tool)
-        client = AsyncOpenAI(
-            api_key=caller_client.api_key,
-            base_url=str(caller_client.base_url),
-        ) if caller_client else AsyncOpenAI()
-        is_codex = bool(caller_client and not str(caller_client.base_url).startswith("https://api.openai.com"))
-        if is_codex:
-            model = _CodexResponsesModel(model=_HTML_WRITER_MODEL_OAI, openai_client=client)
-        else:
-            model = OpenAIResponsesModel(model=_HTML_WRITER_MODEL_OAI, openai_client=client)
+    from agents import OpenAIResponsesModel
+
+    model, is_codex = make_internal_model(
+        tool,
+        litellm_model=LitellmModel,
+        openai_model=OpenAIResponsesModel,
+        codex_model=_CodexResponsesModel,
+    )
     agent = Agent(
         name="Slide HTML Writer",
         description="Generates complete slide HTML from task briefs.",
         instructions=_read_html_writer_instructions(),
         tools=[],
         model=model,
-        model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity="medium",
-            store=False if is_codex else None,
-        ),
+        model_settings=make_internal_model_settings(tool, is_codex=is_codex),
     )
     return agent, is_codex
 

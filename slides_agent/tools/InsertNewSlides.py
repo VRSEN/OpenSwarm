@@ -13,14 +13,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
 
-import os
-from agency_swarm import Agent, ModelSettings, Reasoning
+from agency_swarm import Agent
 from agency_swarm.tools import BaseTool
-from openai import AsyncOpenAI
 from agents.extensions.models.litellm_model import LitellmModel
 from pydantic import BaseModel, Field, ValidationError
 from run_utils import _load_openswarm_dotenv
 
+from .internal_model import make_internal_model, make_internal_model_settings
 from .slide_file_utils import (
     apply_renames,
     build_slide_name,
@@ -30,10 +29,6 @@ from .slide_file_utils import (
 )
 from .slide_html_utils import ensure_full_html
 from .template_registry import load_template_index
-
-
-_PLANNER_MODEL_CLAUDE = "anthropic/claude-sonnet-4-6"
-_PLANNER_MODEL_OAI = "gpt-5.3-codex"
 
 
 class _PlanSlide(BaseModel):
@@ -50,20 +45,6 @@ class _PlanResponse(BaseModel):
     slides: list[_PlanSlide]
 
 
-def _get_caller_openai_client(tool) -> "AsyncOpenAI | None":
-    ctx = getattr(tool, "_context", None)
-    master = getattr(ctx, "context", None)
-    agent_name = getattr(master, "current_agent_name", None)
-    agents = getattr(master, "agents", {})
-    agent = agents.get(agent_name) if agent_name else None
-    model = getattr(agent, "model", None)
-    for attr in ("_client", "openai_client", "client"):
-        maybe = getattr(model, attr, None)
-        if isinstance(maybe, AsyncOpenAI):
-            return maybe
-    return None
-
-
 class _CodexResponsesModel:
     """Subclass of OpenAIResponsesModel that strips parameters unsupported by the Codex endpoint."""
 
@@ -77,7 +58,11 @@ class _CodexResponsesModel:
 
             class _Impl(OpenAIResponsesModel):
                 async def _fetch_response(self, system_instructions, input, model_settings, *args, **kwargs):
-                    model_settings = replace(model_settings, truncation=None)
+                    model_settings = replace(
+                        model_settings,
+                        truncation=None,
+                        verbosity=None,
+                    )
                     return await super()._fetch_response(system_instructions, input, model_settings, *args, **kwargs)
 
             cls._cls = _Impl
@@ -151,34 +136,20 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one InsertNewSlides call.
 
     Model priority:
-    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best planning quality)
-    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
-    3. AsyncOpenAI() default (env vars)
+    1. Calling agent's selected model
+    2. DEFAULT_MODEL from the OpenSwarm environment
+    3. OpenSwarm's standard OpenAI fallback
 
     Returns (agent, is_codex).
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    is_codex = False
-    if anthropic_key:
-        model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
-    else:
-        from agents import OpenAIResponsesModel
-        from openai import AsyncOpenAI
-        caller_client = tool and _get_caller_openai_client(tool)
-        if caller_client:
-            # Create a fresh client with the same credentials — the caller's client is
-            # bound to FastAPI's event loop and cannot be reused in asyncio.run() threads.
-            client = AsyncOpenAI(
-                api_key=caller_client.api_key,
-                base_url=str(caller_client.base_url),
-            )
-        else:
-            client = AsyncOpenAI()
-        is_codex = bool(caller_client and not str(caller_client.base_url).startswith("https://api.openai.com"))
-        if is_codex:
-            model = _CodexResponsesModel(model=_PLANNER_MODEL_OAI, openai_client=client)
-        else:
-            model = OpenAIResponsesModel(model=_PLANNER_MODEL_OAI, openai_client=client)
+    from agents import OpenAIResponsesModel
+
+    model, is_codex = make_internal_model(
+        tool,
+        litellm_model=LitellmModel,
+        openai_model=OpenAIResponsesModel,
+        codex_model=_CodexResponsesModel,
+    )
     agent = Agent(
         name="Slide Planner",
         description="Creates structured slide outline plans.",
@@ -189,11 +160,7 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
         tools=[],
         model=model,
         output_type=_PlanResponse,
-        model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity=None if is_codex else "medium",
-            store=False if is_codex else None,
-        ),
+        model_settings=make_internal_model_settings(tool, is_codex=is_codex),
     )
     return agent, is_codex
 
