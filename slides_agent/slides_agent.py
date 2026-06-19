@@ -6,7 +6,7 @@ from pathlib import Path
 from virtual_assistant.tools.ReadFile import ReadFile
 from shared_tools.CopyFile import CopyFile
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, openai_hosted_tools
 
 # Import slide tools
 from .tools import (
@@ -86,7 +86,7 @@ def create_slides_agent() -> Agent:
             LoadFileAttachment,
             CopyFile,
             ReadFile,
-            WebSearchTool(search_context_size="high"),
+            *openai_hosted_tools(lambda: WebSearchTool(search_context_size="high")),
         ],
         model=get_default_model(),
         model_settings=ModelSettings(

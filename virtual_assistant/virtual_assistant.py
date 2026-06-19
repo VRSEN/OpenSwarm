@@ -6,7 +6,7 @@ from agency_swarm.tools import (
 )
 from openai.types.shared import Reasoning
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, openai_hosted_tools
 from run_utils import _load_openswarm_dotenv
 from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
@@ -29,7 +29,7 @@ def create_virtual_assistant() -> Agent:
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
         tools=[
-            WebSearchTool(),
+            *openai_hosted_tools(WebSearchTool),
             PersistentShellTool,
             IPythonInterpreter,
             CopyFile,

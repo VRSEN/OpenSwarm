@@ -1,5 +1,9 @@
 """Shared model configuration helpers — read by all agents at startup."""
+from collections.abc import Callable
 import os
+from typing import TypeVar
+
+Tool = TypeVar("Tool")
 
 
 def get_default_model(fallback: str = "gpt-5.2"):
@@ -16,6 +20,13 @@ def is_openai_provider() -> bool:
     'litellm/gemini/gemini-3-flash') is treated as a LiteLLM-routed model.
     """
     return "/" not in os.getenv("DEFAULT_MODEL", "")
+
+
+def openai_hosted_tools(*factories: Callable[[], Tool]) -> list[Tool]:
+    """Instantiate OpenAI hosted tools only for OpenAI-routed agents."""
+    if not is_openai_provider():
+        return []
+    return [factory() for factory in factories]
 
 
 def _resolve(model: str):

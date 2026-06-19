@@ -9,7 +9,7 @@ from agency_swarm.tools import (
 )
 from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
 
-from config import get_default_model, is_openai_provider
+from config import get_default_model, is_openai_provider, openai_hosted_tools
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 instructions_path = os.path.join(current_dir, "instructions.md")
@@ -22,7 +22,7 @@ def create_data_analyst() -> Agent:
         tools_folder=os.path.join(current_dir, "tools"),
         model=get_default_model(),
         tools=[
-            WebSearchTool(),
+            *openai_hosted_tools(WebSearchTool),
             PersistentShellTool,
             IPythonInterpreter,
             LoadFileAttachment,
