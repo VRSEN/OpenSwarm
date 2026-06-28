@@ -1,50 +1,36 @@
 import fs from "node:fs"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
+import { platformAssets } from "./platform-assets.mjs"
 
 const root = process.cwd()
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
 const dist = path.resolve(process.argv[2] || "dist")
 const out = path.resolve(process.argv[3] || "platform-packages")
 
-const packages = [
-  ["agentswarm-darwin-arm64", "@vrsen/openswarm-cli-darwin-arm64", "darwin", "arm64", "agentswarm"],
-  ["agentswarm-darwin-x64", "@vrsen/openswarm-cli-darwin-x64", "darwin", "x64", "agentswarm"],
-  ["agentswarm-darwin-x64-baseline", "@vrsen/openswarm-cli-darwin-x64-baseline", "darwin", "x64", "agentswarm"],
-  ["agentswarm-linux-arm64", "@vrsen/openswarm-cli-linux-arm64", "linux", "arm64", "agentswarm"],
-  ["agentswarm-linux-arm64-musl", "@vrsen/openswarm-cli-linux-arm64-musl", "linux", "arm64", "agentswarm"],
-  ["agentswarm-linux-x64", "@vrsen/openswarm-cli-linux-x64", "linux", "x64", "agentswarm"],
-  ["agentswarm-linux-x64-baseline", "@vrsen/openswarm-cli-linux-x64-baseline", "linux", "x64", "agentswarm"],
-  ["agentswarm-linux-x64-baseline-musl", "@vrsen/openswarm-cli-linux-x64-baseline-musl", "linux", "x64", "agentswarm"],
-  ["agentswarm-linux-x64-musl", "@vrsen/openswarm-cli-linux-x64-musl", "linux", "x64", "agentswarm"],
-  ["agentswarm-windows-arm64.exe", "@vrsen/openswarm-cli-windows-arm64", "win32", "arm64", "agentswarm.exe"],
-  ["agentswarm-windows-x64.exe", "@vrsen/openswarm-cli-windows-x64", "win32", "x64", "agentswarm.exe"],
-  ["agentswarm-windows-x64-baseline.exe", "@vrsen/openswarm-cli-windows-x64-baseline", "win32", "x64", "agentswarm.exe"],
-]
-
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out, { recursive: true })
 
-for (const [asset, name, os, cpu, binary] of packages) {
-  const src = path.join(dist, asset)
+for (const item of platformAssets) {
+  const src = path.join(dist, item.asset)
   if (!fs.existsSync(src)) throw new Error(`missing platform asset: ${src}`)
 
-  const dir = path.join(out, name.replace("@vrsen/", "vrsen-"))
+  const dir = path.join(out, item.target.replace("@vrsen/", "vrsen-"))
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin, { recursive: true })
-  fs.copyFileSync(src, path.join(bin, binary))
-  if (os !== "win32") fs.chmodSync(path.join(bin, binary), 0o755)
+  fs.copyFileSync(src, path.join(bin, item.binary))
+  if (item.os !== "win32") fs.chmodSync(path.join(bin, item.binary), 0o755)
   fs.writeFileSync(
     path.join(dir, "package.json"),
     JSON.stringify(
       {
-        name,
+        name: item.target,
         version: pkg.version,
         license: pkg.license,
-        description: `${pkg.description} (${os} ${cpu} TUI binary)`,
+        description: `${pkg.description} (${item.os} ${item.cpu} TUI binary)`,
         files: ["bin/"],
-        os: [os],
-        cpu: [cpu],
+        os: [item.os],
+        cpu: [item.cpu],
         publishConfig: { access: "public" },
       },
       null,

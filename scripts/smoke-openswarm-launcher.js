@@ -178,11 +178,11 @@ async function assertStateRoot() {
   const env = config.getProductEnv({
     env: {},
     stateRoot: path.join('/home/tester', '.openswarm'),
-    version: '1.2.3-test',
   })
   assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
   assert.equal(env.AGENTSWARM_PRODUCT_STATE_ROOT, path.join('/home/tester', '.openswarm'))
-  assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '1.2.3-test')
+  assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'openswarm')
+  assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
   assertProductAddons(env)
 }
 
@@ -200,10 +200,8 @@ async function assertProductEnvJsonSync() {
   const env = config.getProductEnv({
     env: {},
     stateRoot: '__OPENSWARM_STATE_ROOT__',
-    version: '__OPENSWARM_VERSION__',
   })
   delete env.AGENTSWARM_PRODUCT_STATE_ROOT
-  delete env.AGENTSWARM_PRODUCT_VERSION
   assert.deepEqual(fallback, env, 'openswarm.product-env.json is out of sync with openswarm.config.mjs')
 }
 
@@ -244,7 +242,7 @@ function writeFakePackage(rootDir) {
     [
       '#!/usr/bin/env node',
       "'use strict'",
-      "console.log('7.8.9-smoke')",
+      "console.log('platform-smoke')",
     ].join('\n'),
     'utf8',
   )
@@ -257,7 +255,7 @@ function assertLauncherDelegatesToDependency() {
   try {
     const bin = writeFakePackage(tmp)
     const envPath = path.join(tmp, 'env.json')
-    const result = cp.spawnSync(process.execPath, [bin, '--version'], {
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
       cwd: tmp,
       env: {
         ...process.env,
@@ -267,18 +265,34 @@ function assertLauncherDelegatesToDependency() {
       encoding: 'utf8',
     })
     assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
-    assert.equal(result.stdout.trim(), '7.8.9-smoke')
+    assert.equal(result.stdout.trim(), 'platform-smoke')
 
     const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
     assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
     assert.equal(env.AGENTSWARM_PRODUCT_COMMAND, 'openswarm')
-    assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '7.8.9-smoke')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'openswarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
     assert.equal(env.AGENTSWARM_LAUNCHER, '1')
     assert.equal(env.PYTHONUTF8, '1')
     assert.equal(env.PYTHONIOENCODING, 'utf-8')
     assert.ok(env.AGENTSWARM_BIN_PATH, 'AGENTSWARM_BIN_PATH was not set')
     assert.ok(env.AGENTSWARM_BIN_PATH.includes('openswarm-cli-'), 'AGENTSWARM_BIN_PATH did not use an OpenSwarm platform package')
     assertProductAddons(env)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertVersionRequestUsesOpenSwarmPackageVersion() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-version-'))
+  try {
+    const bin = writeFakePackage(tmp)
+    const result = cp.spawnSync(process.execPath, [bin, '--version'], {
+      cwd: tmp,
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    assert.equal(result.stdout.trim(), '7.8.9-smoke')
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -306,25 +320,13 @@ function assertMissingPlatformPackageFails() {
 function assertWorkflowEnvWriter() {
   const result = cp.spawnSync(process.execPath, [envWriter], {
     cwd: root,
-    env: {
-      ...process.env,
-      OPENSWARM_PRODUCT_VERSION: '4.5.6-workflow',
-    },
+    env: process.env,
     encoding: 'utf8',
   })
   assert.equal(result.status, 0, `env writer exited with ${result.status}: ${result.stderr}`)
   assert.ok(result.stdout.includes('AGENTSWARM_PRODUCT_DISPLAY_NAME<<__OPENSWARM_ENV__'))
   assert.ok(result.stdout.includes('OpenSwarm'))
-  assert.ok(result.stdout.includes('AGENTSWARM_PRODUCT_VERSION<<__OPENSWARM_ENV__'))
-  assert.ok(result.stdout.includes('4.5.6-workflow'))
-
-  const missing = cp.spawnSync(process.execPath, [envWriter], {
-    cwd: root,
-    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'OPENSWARM_PRODUCT_VERSION' && key !== 'npm_package_version')),
-    encoding: 'utf8',
-  })
-  assert.notEqual(missing.status, 0, 'env writer succeeded without a product version')
-  assert.ok(missing.stderr.includes('OPENSWARM_PRODUCT_VERSION or npm_package_version is required'), missing.stderr)
+  assert.ok(!result.stdout.includes('AGENTSWARM_PRODUCT_VERSION<<__OPENSWARM_ENV__'))
 }
 
 async function main() {
@@ -334,6 +336,7 @@ async function main() {
   await assertStateRoot()
   await assertProductEnvJsonSync()
   assertLauncherDelegatesToDependency()
+  assertVersionRequestUsesOpenSwarmPackageVersion()
   assertMissingPlatformPackageFails()
   assertWorkflowEnvWriter()
   console.log('openswarm launcher smoke passed')

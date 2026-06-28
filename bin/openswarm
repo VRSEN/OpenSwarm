@@ -142,6 +142,10 @@ function resolveAgentswarm(startDir) {
   }
 }
 
+function isVersionRequest(args) {
+  return args.length === 1 && (args[0] === '--version' || args[0] === '-v' || args[0] === 'version')
+}
+
 const openswarmBinary = resolveOpenSwarmBinary(packageDir)
 if (!openswarmBinary || typeof openswarmBinary !== 'string') {
   const packages = platformPackages().map((item) => item.name).join(', ')
@@ -157,11 +161,16 @@ if (!agentswarmBin) {
   process.exit(1)
 }
 
+if (isVersionRequest(process.argv.slice(2))) {
+  process.stdout.write(`${packageJson.version}\n`)
+  process.exit(0)
+}
+
 async function main() {
   const config = await import(pathToFileURL(path.join(packageDir, 'openswarm.config.mjs')).href)
   const env = {
     ...process.env,
-    ...config.getProductEnv({ version: packageJson.version }),
+    ...config.getProductEnv(),
     AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1',
     AGENTSWARM_BIN_PATH: openswarmBinary,
     PYTHONUTF8: process.env.PYTHONUTF8 || '1',

@@ -14,6 +14,8 @@ export const product = {
   starterRepo: "VRSEN/OpenSwarm",
   starterFolder: "openswarm",
   entryFiles: "swarm.py,agency.py",
+  marketplaceSwarmId: "openswarm",
+  marketplaceSwarmOrigin: "original",
 }
 
 export const productTuiLogoLeft = [
@@ -81,7 +83,8 @@ export function getProductEnv(opts = {}) {
     AGENTSWARM_PRODUCT_ENABLE_ADDONS: "true",
     AGENTSWARM_PRODUCT_ADDONS: JSON.stringify(productAddons),
     AGENTSWARM_PRODUCT_STATE_ROOT: opts.stateRoot ?? resolveStateRoot(opts.env),
-    AGENTSWARM_PRODUCT_VERSION: opts.version,
+    AGENTSWARM_MARKETPLACE_SWARM_ID: product.marketplaceSwarmId,
+    AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: product.marketplaceSwarmOrigin,
   }
 }
 

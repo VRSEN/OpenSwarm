@@ -60,11 +60,8 @@ Connect to 10,000+ external services (Gmail, Slack, GitHub, HubSpot) via Composi
 
 ## 📦 Get Started in 30 Seconds
 
-**For most users (recommended):**
-
 ```bash
-npm install -g @vrsen/openswarm
-openswarm
+npx @vrsen/openswarm
 ```
 
 That's it! The setup wizard handles everything: authentication, dependencies, and configuration.
@@ -119,33 +116,6 @@ Tools gracefully degrade when keys are missing — you'll get clear instructions
 - **OpenClaw + Claude Code integration** - All agents in one place
 
 ⭐ **Star us on GitHub** to stay updated and help us prioritize features!
-
-## 🏗️ For Developers
-
-**Local development:**
-
-```bash
-git clone https://github.com/VRSEN/openswarm.git
-cd openswarm
-python swarm.py
-```
-
-**Docker deployment:**
-
-```bash
-git clone https://github.com/VRSEN/openswarm.git
-cd openswarm
-cp .env.example .env        # Add your API keys
-docker-compose up --build
-```
-
-**API server:**
-
-```bash
-python server.py           # Runs on localhost:8080
-```
-
----
 
 ## 📺 Learn More
 

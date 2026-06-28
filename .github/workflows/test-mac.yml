@@ -9,6 +9,8 @@ on:
       - 'openswarm.config.mjs'
       - 'package.json'
       - 'package-lock.json'
+      - 'scripts/extract-agentswarm-binaries.mjs'
+      - 'scripts/platform-assets.mjs'
       - 'scripts/smoke-openswarm-launcher.js'
       - 'scripts/package-platform-binaries.mjs'
       - 'scripts/write-product-env.mjs'
@@ -24,28 +26,17 @@ jobs:
       - name: Smoke-test launcher platform resolution
         run: node scripts/smoke-openswarm-launcher.js
       - name: Load OpenSwarm product env
-        run: node -e "const fs=require('fs');const cp=require('child_process');process.env.OPENSWARM_PRODUCT_VERSION=require('./package.json').version;fs.appendFileSync(process.env.GITHUB_ENV,cp.execFileSync(process.execPath,['scripts/write-product-env.mjs'],{encoding:'utf8'}));"
+        run: node -e "const fs=require('fs');const cp=require('child_process');fs.appendFileSync(process.env.GITHUB_ENV,cp.execFileSync(process.execPath,['scripts/write-product-env.mjs'],{encoding:'utf8'}));"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/checkout@v4
-        with:
-          repository: VRSEN/agentswarm-cli
-          ref: v1.4.39
-          path: agentswarm-cli
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.13"
-      - name: Smoke-test pinned custom macOS TUI build
+      - name: Extract pinned AgentSwarm macOS TUI binary
         shell: bash
-        working-directory: agentswarm-cli
-        env:
-          OPENCODE_CHANNEL: rc
         run: |
-          bun install
-          cd packages/opencode
-          bun run script/build.ts --single --skip-install
-          test "$(./dist/agentswarm-cli-darwin-arm64/bin/agentswarm --version)" = "$AGENTSWARM_PRODUCT_VERSION"
+          set -euo pipefail
+          version="$(node -p "require('./package.json').dependencies['@vrsen/agentswarm']")"
+          node scripts/extract-agentswarm-binaries.mjs "$version" dist agentswarm-darwin-arm64
+          test "$(./dist/agentswarm-darwin-arm64 --version)" = "$version"
       - name: Test startup
         shell: bash
         run: |
@@ -77,9 +68,9 @@ jobs:
               return None
 
           def install_platform_package(root, repo):
-              binary = repo / "agentswarm-cli" / "packages" / "opencode" / "dist" / "agentswarm-cli-darwin-arm64" / "bin" / "agentswarm"
+              binary = repo / "dist" / "agentswarm-darwin-arm64"
               if not binary.exists():
-                  raise RuntimeError(f"built OpenSwarm binary is missing at {binary}")
+                  raise RuntimeError(f"pinned AgentSwarm binary is missing at {binary}")
               target = (
                   root
                   / "node_modules"

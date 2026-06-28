@@ -16,9 +16,6 @@ concurrency: release-${{ github.ref }}
 permissions:
   contents: read
 
-env:
-  AGENTSWARM_CLI_VERSION: 1.4.39
-
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -28,6 +25,7 @@ jobs:
       is_prerelease: ${{ steps.release.outputs.is_prerelease }}
       npm_tag: ${{ steps.release.outputs.npm_tag }}
       target_commitish: ${{ steps.release.outputs.target_commitish }}
+      agentswarm_cli_version: ${{ steps.release.outputs.agentswarm_cli_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +48,7 @@ jobs:
 
           package_version="$(node -p "require('./package.json').version")"
           lock_version="$(node -p "require('./package-lock.json').packages[''].version")"
+          agentswarm_cli_version="$(node -p "require('./package.json').dependencies['@vrsen/agentswarm']")"
           python_version="$(python3 - <<'PY'
           import tomllib
           with open("pyproject.toml", "rb") as handle:
@@ -63,6 +62,11 @@ jobs:
 
           if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
             echo "Release version must be semver X.Y.Z or X.Y.Z-prerelease, got: $release_version" >&2
+            exit 1
+          fi
+
+          if [[ ! "$agentswarm_cli_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "@vrsen/agentswarm must use an exact AgentSwarm CLI version, got: $agentswarm_cli_version" >&2
             exit 1
           fi
 
@@ -101,152 +105,28 @@ jobs:
             echo "is_prerelease=$is_prerelease"
             echo "npm_tag=$npm_tag"
             echo "target_commitish=$GITHUB_SHA"
+            echo "agentswarm_cli_version=$agentswarm_cli_version"
           } >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-            baseline: false
-            asset: agentswarm-darwin-arm64
-          - os: macos-15-intel
-            platform: darwin
-            arch: x64
-            baseline: false
-            asset: agentswarm-darwin-x64
-          - os: macos-15-intel
-            platform: darwin
-            arch: x64
-            baseline: true
-            asset: agentswarm-darwin-x64-baseline
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            baseline: false
-            asset: agentswarm-linux-x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            baseline: true
-            asset: agentswarm-linux-x64-baseline
-          - os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
-            baseline: false
-            asset: agentswarm-linux-arm64
-          - os: windows-latest
-            platform: windows
-            arch: x64
-            baseline: false
-            build_all: false
-            asset: agentswarm-windows-x64.exe
-          - os: ubuntu-latest
-            platform: windows
-            arch: x64
-            baseline: true
-            build_all: true
-            asset: build-all-assets
-          - os: windows-11-arm
-            platform: windows
-            arch: arm64
-            baseline: false
-            build_all: false
-            asset: agentswarm-windows-arm64.exe
-
-    runs-on: ${{ matrix.os }}
-    environment: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'dev' || 'prod' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: openswarm
 
-      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          repository: VRSEN/agentswarm-cli
-          ref: v${{ env.AGENTSWARM_CLI_VERSION }}
-          path: agentswarm-cli
+          node-version: 20
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.13"
-
-      - name: Validate official product telemetry secrets
-        if: github.repository == 'VRSEN/OpenSwarm'
+      - name: Extract official AgentSwarm binaries
         shell: bash
-        env:
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$POSTHOG_API_KEY"
-
-      - name: Install dependencies
-        working-directory: agentswarm-cli
-        run: bun install
-
-      - name: Load OpenSwarm product env
-        working-directory: openswarm
-        env:
-          OPENSWARM_PRODUCT_VERSION: ${{ needs.prepare.outputs.release_version }}
-        run: node -e "const fs=require('fs');const cp=require('child_process');fs.appendFileSync(process.env.GITHUB_ENV,cp.execFileSync(process.execPath,['scripts/write-product-env.mjs'],{encoding:'utf8'}));"
-
-      - name: Build binary
-        working-directory: agentswarm-cli/packages/opencode
-        env:
-          BUILD_ALL: ${{ matrix.build_all || false }}
-          BASELINE: ${{ matrix.baseline }}
-          OPENCODE_CHANNEL: ${{ needs.prepare.outputs.npm_tag }}
-          AGENTSWARM_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          AGENTSWARM_POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
-        run: |
-          node -e "const cp=require('child_process');const all=process.env.BUILD_ALL==='true';const args=all?['run','script/build.ts']:['run','script/build.ts','--single','--skip-install',...(process.env.BASELINE==='true'?['--baseline']:[])];cp.execFileSync('bun',args,{stdio:'inherit'});"
-
-      - name: Rename binary (Unix runner)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          if [[ "${{ matrix.build_all || false }}" == "true" ]]; then
-            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-arm64-musl/bin/agentswarm agentswarm-linux-arm64-musl
-            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-x64-musl/bin/agentswarm agentswarm-linux-x64-musl
-            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-linux-x64-baseline-musl/bin/agentswarm agentswarm-linux-x64-baseline-musl
-            cp agentswarm-cli/packages/opencode/dist/agentswarm-cli-windows-x64-baseline/bin/agentswarm.exe agentswarm-windows-x64-baseline.exe
-            exit 0
-          fi
-          binary="agentswarm"
-          if [[ "${{ matrix.platform }}" == "windows" ]]; then
-            binary="agentswarm.exe"
-          fi
-          mv agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.baseline && '-baseline' || '' }}/bin/$binary \
-             ${{ matrix.asset }}
-
-      - name: Rename binary (Windows runner)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Move-Item agentswarm-cli/packages/opencode/dist/agentswarm-cli-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.baseline && '-baseline' || '' }}/bin/agentswarm.exe `
-            ${{ matrix.asset }}
+        run: node scripts/extract-agentswarm-binaries.mjs "${{ needs.prepare.outputs.agentswarm_cli_version }}" dist
 
       - name: Upload artifact
-        if: ${{ matrix.build_all != true }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
-          if-no-files-found: error
-
-      - name: Upload build-all artifacts
-        if: ${{ matrix.build_all == true }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-all-assets
-          path: |
-            agentswarm-linux-arm64-musl
-            agentswarm-linux-x64-musl
-            agentswarm-linux-x64-baseline-musl
-            agentswarm-windows-x64-baseline.exe
+          name: agentswarm-binaries
+          path: dist/*
           if-no-files-found: error
 
   release:

@@ -10,6 +10,8 @@ on:
       - 'package-lock.json'
       - 'package.json'
       - 'pyproject.toml'
+      - 'scripts/extract-agentswarm-binaries.mjs'
+      - 'scripts/platform-assets.mjs'
       - 'scripts/write-product-env.mjs'
       - 'scripts/smoke-run-mode.py'
       - 'swarm.py'
@@ -31,37 +33,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/checkout@v4
-        with:
-          repository: VRSEN/agentswarm-cli
-          ref: v1.4.39
-          path: agentswarm-cli
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.13"
-      - name: Resolve OpenSwarm package version
-        id: openswarm
-        run: node -e "console.log('version=' + require('./package.json').version)" >> "$GITHUB_OUTPUT"
       - name: Load OpenSwarm product env
-        env:
-          OPENSWARM_PRODUCT_VERSION: ${{ steps.openswarm.outputs.version }}
         run: node -e "const fs=require('fs');const cp=require('child_process');fs.appendFileSync(process.env.GITHUB_ENV,cp.execFileSync(process.execPath,['scripts/write-product-env.mjs'],{encoding:'utf8'}));"
-      - name: Build local OpenSwarm TUI
+      - name: Extract pinned AgentSwarm TUI
         shell: bash
-        working-directory: agentswarm-cli
-        env:
-          OPENCODE_CHANNEL: rc
         run: |
-          bun install
-          cd packages/opencode
-          bun run script/build.ts --single --skip-install
-          binary="$(find dist -path '*/bin/agentswarm' -type f -perm -111 | head -n 1)"
-          if [ -z "$binary" ]; then
-            echo "FAILED: built agentswarm binary not found under agentswarm-cli/packages/opencode/dist" >&2
-            find dist -maxdepth 4 -type f >&2
-            exit 1
-          fi
-          echo "OPENSWARM_TUI_BINARY=$PWD/$binary" >> "$GITHUB_ENV"
+          set -euo pipefail
+          version="$(node -p "require('./package.json').dependencies['@vrsen/agentswarm']")"
+          node scripts/extract-agentswarm-binaries.mjs "$version" dist agentswarm-darwin-arm64
+          echo "OPENSWARM_TUI_BINARY=$PWD/dist/agentswarm-darwin-arm64" >> "$GITHUB_ENV"
       - name: Verify OpenSwarm agent roster through TUI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

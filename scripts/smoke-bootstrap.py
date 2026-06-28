@@ -218,8 +218,6 @@ def smoke_product_state_root_env() -> None:
             patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
         ):
             values = run_utils._product_env_from_config()
-        if values.get("AGENTSWARM_PRODUCT_VERSION") != "9.8.7-userbase":
-            raise RuntimeError("OpenSwarm Python path did not find fallback product config in site.USER_BASE without Node")
         if values.get("AGENTSWARM_PRODUCT_DISPLAY_NAME") != "OpenSwarm":
             raise RuntimeError("OpenSwarm Python path loaded wrong fallback product config from site.USER_BASE")
 
