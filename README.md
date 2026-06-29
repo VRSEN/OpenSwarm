@@ -68,6 +68,8 @@ That's it! The setup wizard handles everything: authentication, dependencies, an
 
 **Requirements:** Node.js 20+ (Python 3.10+ auto-installed)
 
+Telemetry opt-out: set `ENABLE_TELEMETRY=0`, `OPEN_SWARM_TELEMETRY=0`, `AGENTSWARM_TELEMETRY=0`, or pass `--no-telemetry`.
+
 ## 🔧 Build Your Own Swarm
 
 Fork this repo and create your own specialized AI team in minutes:
@@ -116,6 +118,33 @@ Tools gracefully degrade when keys are missing — you'll get clear instructions
 - **OpenClaw + Claude Code integration** - All agents in one place
 
 ⭐ **Star us on GitHub** to stay updated and help us prioritize features!
+
+## 🏗️ For Developers
+
+**Local development:**
+
+```bash
+git clone https://github.com/VRSEN/openswarm.git
+cd openswarm
+python swarm.py
+```
+
+**Docker deployment:**
+
+```bash
+git clone https://github.com/VRSEN/openswarm.git
+cd openswarm
+cp .env.example .env        # Add your API keys
+docker-compose up --build
+```
+
+**API server:**
+
+```bash
+python server.py           # Runs on localhost:8080
+```
+
+---
 
 ## 📺 Learn More
 

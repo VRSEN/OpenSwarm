@@ -15,6 +15,7 @@ export const product = {
   starterFolder: "openswarm",
   entryFiles: "swarm.py,agency.py",
   marketplaceSwarmId: "openswarm",
+  marketplaceParentSwarmId: undefined,
   marketplaceSwarmOrigin: "original",
 }
 
@@ -63,7 +64,7 @@ export function resolveStateRoot(env = process.env, platform = process.platform,
 }
 
 export function getProductEnv(opts = {}) {
-  return {
+  const env = {
     AGENTSWARM_PRODUCT_DISPLAY_NAME: product.displayName,
     AGENTSWARM_PRODUCT_COMMAND: product.command,
     AGENTSWARM_PRODUCT_PACKAGE_NAME: product.packageName,
@@ -86,6 +87,10 @@ export function getProductEnv(opts = {}) {
     AGENTSWARM_MARKETPLACE_SWARM_ID: product.marketplaceSwarmId,
     AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: product.marketplaceSwarmOrigin,
   }
+  if (product.marketplaceParentSwarmId) {
+    env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID = product.marketplaceParentSwarmId
+  }
+  return env
 }
 
 export default {

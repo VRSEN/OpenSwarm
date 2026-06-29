@@ -182,8 +182,21 @@ async function assertStateRoot() {
   assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
   assert.equal(env.AGENTSWARM_PRODUCT_STATE_ROOT, path.join('/home/tester', '.openswarm'))
   assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'openswarm')
+  assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
   assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
   assertProductAddons(env)
+
+  const originalParent = config.product.marketplaceParentSwarmId
+  config.product.marketplaceParentSwarmId = 'parent-swarm'
+  try {
+    const forkEnv = config.getProductEnv({
+      env: {},
+      stateRoot: path.join('/home/tester', '.openswarm'),
+    })
+    assert.equal(forkEnv.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, 'parent-swarm')
+  } finally {
+    config.product.marketplaceParentSwarmId = originalParent
+  }
 }
 
 async function assertProductEnvJsonSync() {
@@ -271,6 +284,7 @@ function assertLauncherDelegatesToDependency() {
     assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
     assert.equal(env.AGENTSWARM_PRODUCT_COMMAND, 'openswarm')
     assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'openswarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
     assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
     assert.equal(env.AGENTSWARM_LAUNCHER, '1')
     assert.equal(env.PYTHONUTF8, '1')
