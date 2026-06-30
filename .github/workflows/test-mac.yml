@@ -9,9 +9,12 @@ on:
       - 'openswarm.config.mjs'
       - 'package.json'
       - 'package-lock.json'
+      - 'run_utils.py'
       - 'scripts/extract-agentswarm-binaries.mjs'
       - 'scripts/platform-assets.mjs'
+      - 'scripts/smoke-bootstrap.py'
       - 'scripts/smoke-openswarm-launcher.js'
+      - 'scripts/smoke-wheel-bootstrap.py'
       - 'scripts/package-platform-binaries.mjs'
       - 'scripts/write-product-env.mjs'
 
@@ -30,6 +33,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Smoke-test Python bootstrap fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile run_utils.py scripts/smoke-bootstrap.py scripts/smoke-wheel-bootstrap.py
+          python scripts/smoke-bootstrap.py
+          python scripts/smoke-wheel-bootstrap.py
       - name: Extract pinned AgentSwarm macOS TUI binary
         shell: bash
         run: |
