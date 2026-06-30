@@ -48,7 +48,7 @@ def _product_env_from_config() -> dict[str, str]:
     if node and config and package:
         return _product_env_from_mjs(node, config, package)
     if fallback and package:
-        return _product_env_from_json(fallback, package)
+        return _product_env_from_json(fallback)
     if not node and config and package:
         raise RuntimeError("OpenSwarm product config requires Node.js or openswarm.product-env.json. Reinstall OpenSwarm through npm or npx.")
     if not config and not fallback:
@@ -78,17 +78,15 @@ def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, s
     return {key: str(value) for key, value in json.loads(result.stdout).items()}
 
 
-def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
+def _product_env_from_json(fallback: Path) -> dict[str, str]:
     try:
         values = json.loads(fallback.read_text(encoding="utf-8"))
-        pkg = json.loads(package.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"OpenSwarm product config fallback failed to load: {exc}") from exc
-    if not isinstance(values, dict) or not isinstance(pkg, dict) or not pkg.get("version"):
+    if not isinstance(values, dict):
         raise RuntimeError("OpenSwarm product config fallback is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
     env["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
-    env["AGENTSWARM_PRODUCT_VERSION"] = str(pkg["version"])
     return env
 
 

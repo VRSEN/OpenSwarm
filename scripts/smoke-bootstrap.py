@@ -220,6 +220,8 @@ def smoke_product_state_root_env() -> None:
             values = run_utils._product_env_from_config()
         if values.get("AGENTSWARM_PRODUCT_DISPLAY_NAME") != "OpenSwarm":
             raise RuntimeError("OpenSwarm Python path loaded wrong fallback product config from site.USER_BASE")
+        if "AGENTSWARM_PRODUCT_VERSION" in values:
+            raise RuntimeError("OpenSwarm Python fallback product env sent AGENTSWARM_PRODUCT_VERSION")
 
 
 def smoke_python_openswarm_tui_binary_resolution() -> None:
