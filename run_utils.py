@@ -95,12 +95,19 @@ def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     return env
 
 
+def _disables_telemetry(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in {"0", "false", "off", "no"}
+
+
 def _configure_product_env() -> None:
     for key, value in _product_env_from_config().items():
         if key in {"AGENTSWARM_PRODUCT_STATE_ROOT", "AGENTSWARM_PRODUCT_VERSION"}:
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
+    if _disables_telemetry(os.environ.get("ENABLE_TELEMETRY")):
+        os.environ["OPEN_SWARM_TELEMETRY"] = "0"
+        os.environ["AGENTSWARM_TELEMETRY"] = "0"
 
 
 def _openswarm_package_names(platform: str, arch: str, *, musl: bool, baseline: bool) -> list[str]:

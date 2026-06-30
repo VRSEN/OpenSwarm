@@ -121,6 +121,9 @@ def smoke_product_state_root_env() -> None:
                     "OPENSWARM_STATE_ROOT": str(root),
                     "AGENTSWARM_PRODUCT_STATE_ROOT": "/tmp/stale-openswarm-root",
                     "AGENTSWARM_BIN": "/explicit/bin",
+                    "ENABLE_TELEMETRY": "false",
+                    "OPEN_SWARM_TELEMETRY": "1",
+                    "AGENTSWARM_TELEMETRY": "true",
                 },
                 clear=False,
             ):
@@ -148,6 +151,8 @@ def smoke_product_state_root_env() -> None:
                     raise RuntimeError("OpenSwarm Python path did not configure the generic add-ons JSON")
                 if os.environ.get("AGENTSWARM_PRODUCT_ENABLE_ADDONS") != "true":
                     raise RuntimeError("OpenSwarm Python path did not enable AgentSwarm add-ons")
+                if os.environ.get("OPEN_SWARM_TELEMETRY") != "0" or os.environ.get("AGENTSWARM_TELEMETRY") != "0":
+                    raise RuntimeError("OpenSwarm Python path did not map ENABLE_TELEMETRY=0 to AgentSwarm telemetry opt-outs")
                 env.write_text(
                     'AGENTSWARM_BIN="/tmp/test-agentswarm"\nOPENAI_API_KEY="state-openai-updated"\n',
                     encoding="utf-8",

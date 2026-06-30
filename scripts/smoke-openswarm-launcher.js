@@ -278,6 +278,9 @@ function assertLauncherDelegatesToDependency() {
       cwd: tmp,
       env: {
         ...process.env,
+        ENABLE_TELEMETRY: '0',
+        OPEN_SWARM_TELEMETRY: '1',
+        AGENTSWARM_TELEMETRY: 'true',
         OPENSWARM_TUI_URL: 'https://127.0.0.1:9/should-not-be-read',
         OPENSWARM_LAUNCHER_SMOKE_ENV: envPath,
       },
@@ -296,6 +299,8 @@ function assertLauncherDelegatesToDependency() {
     assert.equal(env.AGENTSWARM_LAUNCHER, '1')
     assert.equal(env.PYTHONUTF8, '1')
     assert.equal(env.PYTHONIOENCODING, 'utf-8')
+    assert.equal(env.OPEN_SWARM_TELEMETRY, '0')
+    assert.equal(env.AGENTSWARM_TELEMETRY, '0')
     assert.ok(env.AGENTSWARM_BIN_PATH, 'AGENTSWARM_BIN_PATH was not set')
     assert.ok(env.AGENTSWARM_BIN_PATH.includes('openswarm-cli-'), 'AGENTSWARM_BIN_PATH did not use an OpenSwarm platform package')
     assertProductAddons(env)

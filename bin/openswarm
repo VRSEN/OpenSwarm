@@ -146,6 +146,18 @@ function isVersionRequest(args) {
   return args.length === 1 && (args[0] === '--version' || args[0] === '-v' || args[0] === 'version')
 }
 
+function disablesTelemetry(value) {
+  return typeof value === 'string' && ['0', 'false', 'off', 'no'].includes(value.trim().toLowerCase())
+}
+
+function telemetryEnv(source) {
+  if (!disablesTelemetry(source.ENABLE_TELEMETRY)) return {}
+  return {
+    OPEN_SWARM_TELEMETRY: '0',
+    AGENTSWARM_TELEMETRY: '0',
+  }
+}
+
 const openswarmBinary = resolveOpenSwarmBinary(packageDir)
 if (!openswarmBinary || typeof openswarmBinary !== 'string') {
   const packages = platformPackages().map((item) => item.name).join(', ')
@@ -171,6 +183,7 @@ async function main() {
   const env = {
     ...process.env,
     ...config.getProductEnv(),
+    ...telemetryEnv(process.env),
     AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1',
     AGENTSWARM_BIN_PATH: openswarmBinary,
     PYTHONUTF8: process.env.PYTHONUTF8 || '1',
