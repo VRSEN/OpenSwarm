@@ -1,5 +1,8 @@
 import os from "node:os"
+import fs from "node:fs"
 import path from "node:path"
+
+export const productVersion = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8")).version
 
 // Downstream projects can edit this file to rebrand the launcher and TUI build.
 export const product = {
@@ -84,6 +87,7 @@ export function getProductEnv(opts = {}) {
     AGENTSWARM_PRODUCT_ENABLE_ADDONS: "true",
     AGENTSWARM_PRODUCT_ADDONS: JSON.stringify(productAddons),
     AGENTSWARM_PRODUCT_STATE_ROOT: opts.stateRoot ?? resolveStateRoot(opts.env),
+    AGENTSWARM_PRODUCT_VERSION: productVersion,
     AGENTSWARM_MARKETPLACE_SWARM_ID: product.marketplaceSwarmId,
     AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: product.marketplaceSwarmOrigin,
   }
@@ -99,6 +103,7 @@ export default {
   productTuiLogoRight,
   productWordmarkLines,
   productAddons,
+  productVersion,
   resolveStateRoot,
   getProductEnv,
 }

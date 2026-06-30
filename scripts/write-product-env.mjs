@@ -5,6 +5,7 @@ function stableProductEnv() {
     stateRoot: "__OPENSWARM_STATE_ROOT__",
   })
   delete env.AGENTSWARM_PRODUCT_STATE_ROOT
+  delete env.AGENTSWARM_PRODUCT_VERSION
   return env
 }
 

@@ -32,41 +32,39 @@ def _openswarm_product_roots() -> list[Path]:
 
 
 def _product_env_from_config() -> dict[str, str]:
-    config = package = fallback = None
+    config = config_package = fallback = fallback_package = None
     for root in _product_root_candidates():
         candidate_config = root / "openswarm.config.mjs"
         candidate_fallback = root / "openswarm.product-env.json"
         candidate_package = root / "package.json"
         if not fallback and candidate_fallback.exists() and candidate_package.exists():
             fallback = candidate_fallback
-            package = candidate_package
+            fallback_package = candidate_package
         if candidate_config.exists() and candidate_package.exists():
             config = candidate_config
-            package = candidate_package
+            config_package = candidate_package
             break
     node = shutil.which("node")
-    if node and config and package:
-        return _product_env_from_mjs(node, config, package)
-    if fallback and package:
-        return _product_env_from_json(fallback)
-    if not node and config and package:
+    if node and config and config_package:
+        return _product_env_from_mjs(node, config)
+    if fallback and fallback_package:
+        return _product_env_from_json(fallback, fallback_package)
+    if not node and config and config_package:
         raise RuntimeError("OpenSwarm product config requires Node.js or openswarm.product-env.json. Reinstall OpenSwarm through npm or npx.")
     if not config and not fallback:
         raise RuntimeError("OpenSwarm product config files are missing. Reinstall OpenSwarm through npm or npx.")
     raise RuntimeError("OpenSwarm package metadata is missing. Reinstall OpenSwarm through npm or npx.")
 
 
-def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, str]:
+def _product_env_from_mjs(node: str, config: Path) -> dict[str, str]:
     script = (
-        "const fs=require('fs');"
         "const {pathToFileURL}=require('url');"
         "import(pathToFileURL(process.argv[1]).href).then((cfg)=>{"
-        "const pkg=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));"
-        "process.stdout.write(JSON.stringify(cfg.getProductEnv({stateRoot:process.argv[2],version:pkg.version})));"
+        "process.stdout.write(JSON.stringify(cfg.getProductEnv({stateRoot:process.argv[2]})));"
         "}).catch((err)=>{console.error(err&&err.stack||err);process.exit(1);});"
     )
     result = subprocess.run(
-        [node, "-e", script, str(config), str(_openswarm_state_root()), str(package)],
+        [node, "-e", script, str(config), str(_openswarm_state_root())],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
@@ -78,21 +76,28 @@ def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, s
     return {key: str(value) for key, value in json.loads(result.stdout).items()}
 
 
-def _product_env_from_json(fallback: Path) -> dict[str, str]:
+def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     try:
         values = json.loads(fallback.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"OpenSwarm product config fallback failed to load: {exc}") from exc
+    try:
+        package_values = json.loads(package.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenSwarm package metadata failed to load: {exc}") from exc
     if not isinstance(values, dict):
         raise RuntimeError("OpenSwarm product config fallback is invalid. Reinstall OpenSwarm through npm or npx.")
+    if not isinstance(package_values, dict) or not package_values.get("version"):
+        raise RuntimeError("OpenSwarm package metadata is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
     env["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
+    env["AGENTSWARM_PRODUCT_VERSION"] = str(package_values["version"])
     return env
 
 
 def _configure_product_env() -> None:
     for key, value in _product_env_from_config().items():
-        if key == "AGENTSWARM_PRODUCT_STATE_ROOT":
+        if key in {"AGENTSWARM_PRODUCT_STATE_ROOT", "AGENTSWARM_PRODUCT_VERSION"}:
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
