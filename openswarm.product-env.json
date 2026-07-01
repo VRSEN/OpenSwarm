@@ -17,6 +17,6 @@
   "AGENTSWARM_PRODUCT_PYTHON_ENVIRONMENT": "standalone",
   "AGENTSWARM_PRODUCT_ENABLE_ADDONS": "true",
   "AGENTSWARM_PRODUCT_ADDONS": "[{\"id\":\"search\",\"title\":\"Web Search\",\"keys\":[\"SEARCH_API_KEY\"]},{\"id\":\"anthropic\",\"title\":\"Anthropic Claude\",\"keys\":[\"ANTHROPIC_API_KEY\"],\"excludeProviders\":[\"anthropic\"]},{\"id\":\"composio\",\"title\":\"Composio\",\"keys\":[\"COMPOSIO_API_KEY\",\"COMPOSIO_USER_ID\"]},{\"id\":\"google\",\"title\":\"Google Gemini\",\"keys\":[\"GOOGLE_API_KEY\"],\"excludeProviders\":[\"google\"]},{\"id\":\"fal\",\"title\":\"Fal.ai\",\"keys\":[\"FAL_KEY\"]},{\"id\":\"pexels\",\"title\":\"Pexels\",\"keys\":[\"PEXELS_API_KEY\"]},{\"id\":\"pixabay\",\"title\":\"Pixabay\",\"keys\":[\"PIXABAY_API_KEY\"]},{\"id\":\"unsplash\",\"title\":\"Unsplash\",\"keys\":[\"UNSPLASH_ACCESS_KEY\"]}]",
-  "AGENTSWARM_MARKETPLACE_SWARM_ID": "openswarm",
+  "AGENTSWARM_MARKETPLACE_SWARM_ID": "VRSEN/OpenSwarm",
   "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN": "original"
 }

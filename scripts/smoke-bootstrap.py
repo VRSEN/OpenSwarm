@@ -17,6 +17,30 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MARKETPLACE_ENV_KEYS = (
+    "OPENSWARM_MARKETPLACE_SWARM_ID",
+    "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID",
+    "OPENSWARM_MARKETPLACE_SWARM_ORIGIN",
+    "AGENTSWARM_MARKETPLACE_SWARM_ID",
+    "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID",
+    "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN",
+)
+
+
+@contextmanager
+def clean_marketplace_env(extra: dict[str, str] | None = None) -> Iterator[None]:
+    old = {key: os.environ.get(key) for key in MARKETPLACE_ENV_KEYS}
+    try:
+        for key in MARKETPLACE_ENV_KEYS:
+            os.environ.pop(key, None)
+        if extra:
+            os.environ.update(extra)
+        yield
+    finally:
+        for key in MARKETPLACE_ENV_KEYS:
+            os.environ.pop(key, None)
+            if old[key] is not None:
+                os.environ[key] = old[key]
 
 
 @contextmanager
@@ -49,6 +73,7 @@ def smoke_swarm_import_skips_bootstrap() -> None:
         "run_utils": module(
             "run_utils",
             _bootstrap=lambda: order.append("bootstrap"),
+            _configure_product_env=lambda: order.append("product-env"),
             _openswarm_state_root=lambda: ROOT,
             _preload_agentswarm_bin=lambda: order.append("preload"),
         ),
@@ -87,6 +112,83 @@ def smoke_swarm_import_skips_bootstrap() -> None:
         raise RuntimeError(f"swarm.py ran bootstrap during import: {order}")
     if not order or order[0] != "dotenv":
         raise RuntimeError(f"swarm.py did not configure runtime during import: {order}")
+
+
+def smoke_swarm_main_configures_product_env() -> None:
+    order: list[str] = []
+
+    class Agent:
+        def __gt__(self, other: object) -> tuple[object, object]:
+            return (self, other)
+
+    class Agency:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            order.append("agency")
+
+        def tui(self, **kwargs: object) -> None:
+            order.append("tui")
+
+    patches = module("patches", __path__=[])
+    replacements = {
+        "run_utils": module(
+            "run_utils",
+            _bootstrap=lambda: order.append("bootstrap"),
+            _configure_product_env=lambda: order.append("product-env"),
+            _openswarm_state_root=lambda: ROOT,
+            _preload_agentswarm_bin=lambda: order.append("preload"),
+        ),
+        "dotenv": module("dotenv", load_dotenv=lambda *args, **kwargs: order.append("dotenv")),
+        "agents": module(
+            "agents",
+            set_tracing_disabled=lambda _value: order.append("agents"),
+            set_tracing_export_api_key=lambda _value: order.append("agents"),
+        ),
+        "agency_swarm": module("agency_swarm", Agency=Agency),
+        "agency_swarm.tools": module("agency_swarm.tools", Handoff=object, SendMessage=object),
+        "orchestrator": module("orchestrator", create_orchestrator=lambda: Agent()),
+        "virtual_assistant": module("virtual_assistant", create_virtual_assistant=lambda: Agent()),
+        "deep_research": module("deep_research", create_deep_research=lambda: Agent()),
+        "data_analyst_agent": module("data_analyst_agent", create_data_analyst=lambda: Agent()),
+        "slides_agent": module("slides_agent", create_slides_agent=lambda: Agent()),
+        "docs_agent": module("docs_agent", create_docs_agent=lambda: Agent()),
+        "video_generation_agent": module("video_generation_agent", create_video_generation_agent=lambda: Agent()),
+        "image_generation_agent": module("image_generation_agent", create_image_generation_agent=lambda: Agent()),
+        "patches": patches,
+        "patches.patch_ipython_interpreter_composio": module(
+            "patches.patch_ipython_interpreter_composio",
+            apply_ipython_composio_context_patch=lambda: order.append("patch"),
+        ),
+        "patches.patch_utf8_file_reads": module(
+            "patches.patch_utf8_file_reads",
+            apply_utf8_file_read_patch=lambda: order.append("patch"),
+        ),
+    }
+
+    spec = importlib.util.spec_from_file_location("__main__", ROOT / "swarm.py")
+    if not spec or not spec.loader:
+        raise RuntimeError("could not load swarm.py main import spec")
+
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_main = sys.modules.get("__main__")
+    try:
+        with swapped_modules(replacements):
+            swarm = importlib.util.module_from_spec(spec)
+            sys.modules["__main__"] = swarm
+            spec.loader.exec_module(swarm)
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        if old_main is None:
+            sys.modules.pop("__main__", None)
+        else:
+            sys.modules["__main__"] = old_main
+
+    if "product-env" not in order:
+        raise RuntimeError(f"swarm.py main did not configure OpenSwarm product env: {order}")
+    if order.index("product-env") < order.index("dotenv"):
+        raise RuntimeError(f"swarm.py configured product env before loading state dotenv: {order}")
+    if order.index("product-env") > order.index("tui"):
+        raise RuntimeError(f"swarm.py configured product env after TUI start: {order}")
 
 
 def smoke_product_state_root_env() -> None:
@@ -161,6 +263,19 @@ def smoke_product_state_root_env() -> None:
                 run_utils._load_openswarm_dotenv(override=True)
                 if os.environ.get("OPENAI_API_KEY") != "state-openai-updated":
                     raise RuntimeError("OpenSwarm post-onboarding dotenv refresh did not replace stale process values")
+
+                with clean_marketplace_env({
+                    "OPENSWARM_MARKETPLACE_SWARM_ID": "someone/custom-swarm",
+                    "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID": "VRSEN/OpenSwarm",
+                    "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "fork",
+                }):
+                    values = run_utils._product_env_from_config()
+                if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "someone/custom-swarm":
+                    raise RuntimeError("OpenSwarm Python Node config ignored marketplace env swarm id")
+                if values.get("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID") != "VRSEN/OpenSwarm":
+                    raise RuntimeError("OpenSwarm Python Node config ignored marketplace env parent swarm id")
+                if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "fork":
+                    raise RuntimeError("OpenSwarm Python Node config ignored marketplace env origin")
         finally:
             os.chdir(old_cwd)
             if old_state is None:
@@ -209,6 +324,10 @@ def smoke_product_state_root_env() -> None:
             (ROOT / "openswarm.config.mjs").read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+        (userbase / "openswarm.marketplace.json").write_text(
+            (ROOT / "openswarm.marketplace.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
         (userbase / "openswarm.product-env.json").write_text(
             (ROOT / "openswarm.product-env.json").read_text(encoding="utf-8"),
             encoding="utf-8",
@@ -221,30 +340,140 @@ def smoke_product_state_root_env() -> None:
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
             patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env(),
         ):
             values = run_utils._product_env_from_config()
         if values.get("AGENTSWARM_PRODUCT_DISPLAY_NAME") != "OpenSwarm":
             raise RuntimeError("OpenSwarm Python path loaded wrong fallback product config from site.USER_BASE")
         if values.get("AGENTSWARM_PRODUCT_VERSION") != "9.8.7-userbase":
             raise RuntimeError("OpenSwarm Python fallback product env did not send the package version")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "VRSEN/OpenSwarm":
+            raise RuntimeError("OpenSwarm Python fallback product env did not send marketplace metadata")
 
         with (
             patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
             patch.object(run_utils.sys, "prefix", str(prefix)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
-            patch.dict(
-                os.environ,
-                {
-                    "AGENTSWARM_PRODUCT_VERSION": "stale-parent-version",
-                    "OPENSWARM_STATE_ROOT": str(base / "state"),
-                },
-                clear=False,
-            ),
+            patch.dict(os.environ, {"AGENTSWARM_PRODUCT_VERSION": "stale-parent-version", "OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "AGENTSWARM_MARKETPLACE_SWARM_ID": "stale/swarm",
+                "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID": "stale/parent",
+                "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN": "fork",
+            }),
         ):
             run_utils._configure_product_env()
             if os.environ.get("AGENTSWARM_PRODUCT_VERSION") != "9.8.7-userbase":
                 raise RuntimeError("OpenSwarm Python fallback product env preserved a stale parent version")
+            if os.environ.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "VRSEN/OpenSwarm":
+                raise RuntimeError("OpenSwarm Python fallback product env preserved a stale marketplace swarm id")
+            if os.environ.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "original":
+                raise RuntimeError("OpenSwarm Python fallback product env preserved a stale marketplace origin")
+            if "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID" in os.environ:
+                raise RuntimeError("OpenSwarm Python fallback product env preserved a stale marketplace parent id")
+
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "OPENSWARM_MARKETPLACE_SWARM_ID": "someone/custom-swarm",
+                "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID": "VRSEN/OpenSwarm",
+                "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "fork",
+                "AGENTSWARM_MARKETPLACE_SWARM_ID": "stale/swarm",
+                "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID": "stale/parent",
+                "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN": "unknown",
+            }),
+        ):
+            values = run_utils._product_env_from_config()
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "someone/custom-swarm":
+            raise RuntimeError("OpenSwarm Python fallback ignored marketplace env swarm id")
+        if values.get("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID") != "VRSEN/OpenSwarm":
+            raise RuntimeError("OpenSwarm Python fallback ignored marketplace env parent swarm id")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "fork":
+            raise RuntimeError("OpenSwarm Python fallback ignored marketplace env origin")
+
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "OPENSWARM_MARKETPLACE_SWARM_ID": "someone/custom-swarm",
+                "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID": "",
+                "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "original",
+            }),
+        ):
+            values = run_utils._product_env_from_config()
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "someone/custom-swarm":
+            raise RuntimeError("OpenSwarm Python fallback ignored marketplace env with empty parent")
+        if "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID" in values:
+            raise RuntimeError("OpenSwarm Python fallback preserved empty marketplace parent")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "original":
+            raise RuntimeError("OpenSwarm Python fallback ignored marketplace origin with empty parent")
+
+        full_owner = "a" * 39
+        full_repo = "b" * 100
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "OPENSWARM_MARKETPLACE_SWARM_ID": f"{full_owner}/{full_repo}",
+                "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID": "VRSEN/OpenSwarm",
+                "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "fork",
+            }),
+        ):
+            values = run_utils._product_env_from_config()
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != f"{full_owner}/{full_repo}":
+            raise RuntimeError("OpenSwarm Python fallback rejected a full-length marketplace env")
+        if values.get("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID") != "VRSEN/OpenSwarm":
+            raise RuntimeError("OpenSwarm Python fallback ignored full-length marketplace parent")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "fork":
+            raise RuntimeError("OpenSwarm Python fallback ignored full-length marketplace origin")
+
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "OPENSWARM_MARKETPLACE_SWARM_ID": "someone/custom-swarm",
+                "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "fork",
+            }),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "parentSwarmId is required" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted fork marketplace env without a parent")
+
+        with (
+            patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(prefix)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+            clean_marketplace_env({
+                "OPENSWARM_MARKETPLACE_SWARM_ID": f"owner/{'a' * 129}",
+                "OPENSWARM_MARKETPLACE_SWARM_ORIGIN": "original",
+            }),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "GitHub owner/repo" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted overlong marketplace env")
 
         early = base / "early-root"
         later = base / "later-root"
@@ -252,6 +481,10 @@ def smoke_product_state_root_env() -> None:
         later.mkdir()
         (early / "openswarm.product-env.json").write_text(
             (ROOT / "openswarm.product-env.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (early / "openswarm.marketplace.json").write_text(
+            '{"swarmId":"someone/custom-swarm","parentSwarmId":"VRSEN/OpenSwarm","swarmOrigin":"fork"}\n',
             encoding="utf-8",
         )
         (early / "package.json").write_text('{"version":"4.5.6-fallback"}\n', encoding="utf-8")
@@ -271,6 +504,101 @@ def smoke_product_state_root_env() -> None:
             values = run_utils._product_env_from_config()
         if values.get("AGENTSWARM_PRODUCT_VERSION") != "4.5.6-fallback":
             raise RuntimeError("OpenSwarm Python fallback product env used package metadata from another root")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "someone/custom-swarm":
+            raise RuntimeError("OpenSwarm Python fallback did not use fork marketplace swarm id")
+        if values.get("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID") != "VRSEN/OpenSwarm":
+            raise RuntimeError("OpenSwarm Python fallback did not use fork marketplace parent swarm id")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "fork":
+            raise RuntimeError("OpenSwarm Python fallback did not use fork marketplace origin")
+
+        (early / "openswarm.marketplace.json").write_text('{"swarmId":"","swarmOrigin":"fork"}\n', encoding="utf-8")
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "OpenSwarm marketplace metadata" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted malformed marketplace metadata")
+
+        (early / "openswarm.marketplace.json").write_text('{"swarmId":"openswarm","swarmOrigin":"fork"}\n', encoding="utf-8")
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "GitHub owner/repo" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted non-GitHub marketplace metadata")
+
+        (early / "openswarm.marketplace.json").write_text(
+            f'{{"swarmId":"owner/{"a" * 129}","swarmOrigin":"original"}}\n',
+            encoding="utf-8",
+        )
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "GitHub owner/repo" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted overlong marketplace metadata")
+
+        (early / "openswarm.marketplace.json").write_text(
+            '{"swarmId":"someone/custom-swarm","swarmOrigin":"fork"}\n',
+            encoding="utf-8",
+        )
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "parentSwarmId is required" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted fork marketplace metadata without a parent")
+
+        (early / "openswarm.marketplace.json").write_text(
+            '{"swarmId":"someone/custom-swarm","parentSwarmId":"VRSEN/OpenSwarm","swarmOrigin":"copy"}\n',
+            encoding="utf-8",
+        )
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "swarmOrigin must be original, fork, or unknown" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted malformed marketplace origin")
 
 
 def smoke_python_openswarm_tui_binary_resolution() -> None:
@@ -537,6 +865,7 @@ def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
 
 def main() -> int:
     smoke_swarm_import_skips_bootstrap()
+    smoke_swarm_main_configures_product_env()
     smoke_product_state_root_env()
     smoke_python_openswarm_tui_binary_resolution()
     smoke_bootstrap_node_setup_installs_slides_dependencies()

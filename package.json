@@ -12,6 +12,7 @@
     "files": [
         "bin/",
         "openswarm.config.mjs",
+        "openswarm.marketplace.json",
         "openswarm.product-env.json",
         "run_utils.py",
         "swarm.py",

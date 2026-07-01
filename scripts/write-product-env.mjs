@@ -2,6 +2,7 @@ import { getProductEnv } from "../openswarm.config.mjs"
 
 function stableProductEnv() {
   const env = getProductEnv({
+    env: {},
     stateRoot: "__OPENSWARM_STATE_ROOT__",
   })
   delete env.AGENTSWARM_PRODUCT_STATE_ROOT
@@ -14,7 +15,7 @@ if (process.argv.includes("--json")) {
   process.exit(0)
 }
 
-const env = getProductEnv()
+const env = getProductEnv({ env: {} })
 
 for (const [key, value] of Object.entries(env)) {
   if (key === "AGENTSWARM_PRODUCT_STATE_ROOT") continue

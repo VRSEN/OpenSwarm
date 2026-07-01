@@ -180,14 +180,18 @@ if (isVersionRequest(process.argv.slice(2))) {
 
 async function main() {
   const config = await import(pathToFileURL(path.join(packageDir, 'openswarm.config.mjs')).href)
+  const productEnv = config.getProductEnv({ env: process.env })
   const env = {
     ...process.env,
-    ...config.getProductEnv(),
+    ...productEnv,
     ...telemetryEnv(process.env),
     AGENTSWARM_LAUNCHER: process.env.AGENTSWARM_LAUNCHER || '1',
     AGENTSWARM_BIN_PATH: openswarmBinary,
     PYTHONUTF8: process.env.PYTHONUTF8 || '1',
     PYTHONIOENCODING: process.env.PYTHONIOENCODING || 'utf-8',
+  }
+  if (!('AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID' in productEnv)) {
+    delete env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID
   }
 
   const result = childProcess.spawnSync(process.execPath, [agentswarmBin, ...process.argv.slice(2)], {

@@ -1,6 +1,6 @@
 import os
 
-from run_utils import _bootstrap, _openswarm_state_root, _preload_agentswarm_bin
+from run_utils import _bootstrap, _configure_product_env, _openswarm_state_root, _preload_agentswarm_bin
 
 _RUNTIME_CONFIGURED = False
 
@@ -36,6 +36,9 @@ if __name__ == "__main__":
     _bootstrap()
 
 _configure_runtime()
+
+if __name__ == "__main__":
+    _configure_product_env()
 
 
 def create_agency(load_threads_callback=None):

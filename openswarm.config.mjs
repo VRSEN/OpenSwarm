@@ -3,6 +3,88 @@ import fs from "node:fs"
 import path from "node:path"
 
 export const productVersion = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8")).version
+const marketplacePath = new URL("./openswarm.marketplace.json", import.meta.url)
+const defaultMarketplace = {
+  swarmId: "VRSEN/OpenSwarm",
+  parentSwarmId: undefined,
+  swarmOrigin: "original",
+}
+const githubRepoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9._-]{1,100}$/
+const marketplaceEnv = {
+  swarmId: "OPENSWARM_MARKETPLACE_SWARM_ID",
+  parentSwarmId: "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID",
+  swarmOrigin: "OPENSWARM_MARKETPLACE_SWARM_ORIGIN",
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function readString(value, key, { required = true } = {}) {
+  if ((value === undefined || value === "") && !required) return undefined
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`OpenSwarm marketplace metadata ${key} must be a non-empty string`)
+  }
+  return value.trim()
+}
+
+function readGitHubRepo(value, key, opts) {
+  const repo = readString(value, key, opts)
+  if (repo === undefined) return undefined
+  if (!githubRepoPattern.test(repo)) {
+    throw new Error(`OpenSwarm marketplace metadata ${key} must be a GitHub owner/repo`)
+  }
+  return repo
+}
+
+function readMarketplaceFileMetadata() {
+  if (!fs.existsSync(marketplacePath)) return defaultMarketplace
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(marketplacePath, "utf8"))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`OpenSwarm marketplace metadata failed to load: ${message}`)
+  }
+  if (!isRecord(parsed)) {
+    throw new Error("OpenSwarm marketplace metadata must be a JSON object")
+  }
+  const swarmOrigin = readString(parsed.swarmOrigin, "swarmOrigin")
+  if (!["original", "fork", "unknown"].includes(swarmOrigin)) {
+    throw new Error("OpenSwarm marketplace metadata swarmOrigin must be original, fork, or unknown")
+  }
+  const parentSwarmId = readGitHubRepo(parsed.parentSwarmId, "parentSwarmId", { required: false })
+  if (swarmOrigin === "fork" && parentSwarmId === undefined) {
+    throw new Error("OpenSwarm marketplace metadata parentSwarmId is required for fork swarms")
+  }
+  return {
+    swarmId: readGitHubRepo(parsed.swarmId, "swarmId"),
+    parentSwarmId,
+    swarmOrigin,
+  }
+}
+
+function readMarketplaceEnv(env = process.env) {
+  const hasEnv = Object.values(marketplaceEnv).some((key) => typeof env[key] === "string" && env[key].trim() !== "")
+  if (!hasEnv) return undefined
+  const swarmOrigin = readString(env[marketplaceEnv.swarmOrigin], marketplaceEnv.swarmOrigin)
+  if (!["original", "fork", "unknown"].includes(swarmOrigin)) {
+    throw new Error("OpenSwarm marketplace metadata OPENSWARM_MARKETPLACE_SWARM_ORIGIN must be original, fork, or unknown")
+  }
+  const parentSwarmId = readGitHubRepo(env[marketplaceEnv.parentSwarmId], marketplaceEnv.parentSwarmId, {
+    required: false,
+  })
+  if (swarmOrigin === "fork" && parentSwarmId === undefined) {
+    throw new Error("OpenSwarm marketplace metadata OPENSWARM_MARKETPLACE_PARENT_SWARM_ID is required for fork swarms")
+  }
+  return {
+    swarmId: readGitHubRepo(env[marketplaceEnv.swarmId], marketplaceEnv.swarmId),
+    parentSwarmId,
+    swarmOrigin,
+  }
+}
+
+const marketplace = readMarketplaceFileMetadata()
 
 // Downstream projects can edit this file to rebrand the launcher and TUI build.
 export const product = {
@@ -17,9 +99,9 @@ export const product = {
   starterRepo: "VRSEN/OpenSwarm",
   starterFolder: "openswarm",
   entryFiles: "swarm.py,agency.py",
-  marketplaceSwarmId: "openswarm",
-  marketplaceParentSwarmId: undefined,
-  marketplaceSwarmOrigin: "original",
+  marketplaceSwarmId: marketplace.swarmId,
+  marketplaceParentSwarmId: marketplace.parentSwarmId,
+  marketplaceSwarmOrigin: marketplace.swarmOrigin,
 }
 
 export const productTuiLogoLeft = [
@@ -67,6 +149,11 @@ export function resolveStateRoot(env = process.env, platform = process.platform,
 }
 
 export function getProductEnv(opts = {}) {
+  const activeMarketplace = readMarketplaceEnv(opts.env) ?? {
+    swarmId: product.marketplaceSwarmId,
+    parentSwarmId: product.marketplaceParentSwarmId,
+    swarmOrigin: product.marketplaceSwarmOrigin,
+  }
   const env = {
     AGENTSWARM_PRODUCT_DISPLAY_NAME: product.displayName,
     AGENTSWARM_PRODUCT_COMMAND: product.command,
@@ -88,11 +175,11 @@ export function getProductEnv(opts = {}) {
     AGENTSWARM_PRODUCT_ADDONS: JSON.stringify(productAddons),
     AGENTSWARM_PRODUCT_STATE_ROOT: opts.stateRoot ?? resolveStateRoot(opts.env),
     AGENTSWARM_PRODUCT_VERSION: productVersion,
-    AGENTSWARM_MARKETPLACE_SWARM_ID: product.marketplaceSwarmId,
-    AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: product.marketplaceSwarmOrigin,
+    AGENTSWARM_MARKETPLACE_SWARM_ID: activeMarketplace.swarmId,
+    AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: activeMarketplace.swarmOrigin,
   }
-  if (product.marketplaceParentSwarmId) {
-    env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID = product.marketplaceParentSwarmId
+  if (activeMarketplace.parentSwarmId) {
+    env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID = activeMarketplace.parentSwarmId
   }
   return env
 }

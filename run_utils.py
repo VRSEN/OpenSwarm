@@ -1,11 +1,18 @@
 import json
 import os
+import re
 import sys
 import site
 import subprocess
 import shutil
 import platform as platform_module
 from pathlib import Path
+
+_MARKETPLACE_ENV_KEYS = {
+    "swarmId": "OPENSWARM_MARKETPLACE_SWARM_ID",
+    "parentSwarmId": "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID",
+    "swarmOrigin": "OPENSWARM_MARKETPLACE_SWARM_ORIGIN",
+}
 
 
 def _openswarm_state_root() -> Path:
@@ -90,9 +97,79 @@ def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     if not isinstance(package_values, dict) or not package_values.get("version"):
         raise RuntimeError("OpenSwarm package metadata is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
+    marketplace_env = _marketplace_env_from_process() or _marketplace_env_from_json(fallback.parent)
+    if marketplace_env:
+        for key in (
+            "AGENTSWARM_MARKETPLACE_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN",
+        ):
+            env.pop(key, None)
+        env.update(marketplace_env)
     env["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
     env["AGENTSWARM_PRODUCT_VERSION"] = str(package_values["version"])
     return env
+
+
+def _marketplace_env_from_json(root: Path) -> dict[str, str]:
+    path = root / "openswarm.marketplace.json"
+    if not path.exists():
+        return {}
+    try:
+        values = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenSwarm marketplace metadata failed to load: {exc}") from exc
+    if not isinstance(values, dict):
+        raise RuntimeError("OpenSwarm marketplace metadata must be a JSON object.")
+
+    return _marketplace_env_from_values(values)
+
+
+def _marketplace_env_from_process() -> dict[str, str]:
+    if not any(os.getenv(key, "").strip() for key in _MARKETPLACE_ENV_KEYS.values()):
+        return {}
+    return _marketplace_env_from_values({
+        key: os.getenv(env_key)
+        for key, env_key in _MARKETPLACE_ENV_KEYS.items()
+    })
+
+
+def _marketplace_env_from_values(values: dict[str, object]) -> dict[str, str]:
+    swarm_id = _marketplace_repo(values, "swarmId")
+    parent_swarm_id = _marketplace_repo(values, "parentSwarmId", required=False)
+    swarm_origin = _metadata_string(values, "swarmOrigin")
+    if swarm_origin not in {"original", "fork", "unknown"}:
+        raise RuntimeError("OpenSwarm marketplace metadata swarmOrigin must be original, fork, or unknown.")
+    if swarm_origin == "fork" and parent_swarm_id is None:
+        raise RuntimeError("OpenSwarm marketplace metadata parentSwarmId is required for fork swarms.")
+
+    env = {
+        "AGENTSWARM_MARKETPLACE_SWARM_ID": swarm_id,
+        "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN": swarm_origin,
+    }
+    if parent_swarm_id:
+        env["AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID"] = parent_swarm_id
+    else:
+        env.pop("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID", None)
+    return env
+
+
+def _metadata_string(values: dict[str, object], key: str, *, required: bool = True) -> str | None:
+    value = values.get(key)
+    if (value is None or value == "") and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a non-empty string.")
+    return value.strip()
+
+
+def _marketplace_repo(values: dict[str, object], key: str, *, required: bool = True) -> str | None:
+    repo = _metadata_string(values, key, required=required)
+    if repo is None:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}", repo):
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
+    return repo
 
 
 def _disables_telemetry(value: str | None) -> bool:
@@ -100,11 +177,20 @@ def _disables_telemetry(value: str | None) -> bool:
 
 
 def _configure_product_env() -> None:
-    for key, value in _product_env_from_config().items():
-        if key in {"AGENTSWARM_PRODUCT_STATE_ROOT", "AGENTSWARM_PRODUCT_VERSION"}:
+    product_env = _product_env_from_config()
+    for key, value in product_env.items():
+        if key in {
+            "AGENTSWARM_PRODUCT_STATE_ROOT",
+            "AGENTSWARM_PRODUCT_VERSION",
+            "AGENTSWARM_MARKETPLACE_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN",
+        }:
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
+    if "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID" not in product_env:
+        os.environ.pop("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID", None)
     if _disables_telemetry(os.environ.get("ENABLE_TELEMETRY")):
         os.environ["OPEN_SWARM_TELEMETRY"] = "0"
         os.environ["AGENTSWARM_TELEMETRY"] = "0"
