@@ -569,6 +569,25 @@ def smoke_product_state_root_env() -> None:
                 raise RuntimeError("OpenSwarm Python fallback accepted invalid GitHub owner metadata")
 
         (early / "openswarm.marketplace.json").write_text(
+            '{"swarmId":"someone/custom-swarm.git","swarmOrigin":"original"}\n',
+            encoding="utf-8",
+        )
+        with (
+            patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.sys, "prefix", str(later)),
+            patch.object(run_utils.site, "USER_BASE", str(userbase)),
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+        ):
+            try:
+                run_utils._product_env_from_config()
+            except RuntimeError as exc:
+                if "GitHub owner/repo" not in str(exc):
+                    raise
+            else:
+                raise RuntimeError("OpenSwarm Python fallback accepted .git marketplace metadata")
+
+        (early / "openswarm.marketplace.json").write_text(
             f'{{"swarmId":"owner/{"a" * 129}","swarmOrigin":"original"}}\n',
             encoding="utf-8",
         )
