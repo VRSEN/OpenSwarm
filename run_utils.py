@@ -94,7 +94,7 @@ def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     if not isinstance(package_values, dict) or not package_values.get("version"):
         raise RuntimeError("OpenSwarm package metadata is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
-    marketplace_env = _marketplace_env_from_json(fallback.parent)
+    marketplace_env = _marketplace_env_from_json(fallback.parent, Path.cwd())
     if marketplace_env:
         for key in (
             "AGENTSWARM_MARKETPLACE_SWARM_ID",
@@ -108,9 +108,13 @@ def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     return env
 
 
-def _marketplace_env_from_json(root: Path) -> dict[str, str]:
-    path = root / "openswarm.marketplace.json"
-    if not path.exists():
+def _marketplace_env_from_json(root: Path, project: Path | None = None) -> dict[str, str]:
+    paths = []
+    if project:
+        paths.append(project / "openswarm.marketplace.json")
+    paths.append(root / "openswarm.marketplace.json")
+    path = next((item for item in dict.fromkeys(paths) if item.exists()), None)
+    if path is None:
         return {}
     try:
         values = json.loads(path.read_text(encoding="utf-8"))

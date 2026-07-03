@@ -364,6 +364,33 @@ def smoke_product_state_root_env() -> None:
         if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "VRSEN/OpenSwarm":
             raise RuntimeError("OpenSwarm Python fallback product env did not send marketplace metadata")
 
+        project = base / "project"
+        project.mkdir()
+        (project / "openswarm.marketplace.json").write_text(
+            '{"swarmId":"someone/project-swarm","parentSwarmId":"VRSEN/OpenSwarm","swarmOrigin":"fork"}\n',
+            encoding="utf-8",
+        )
+        old_cwd = Path.cwd()
+        try:
+            os.chdir(project)
+            with (
+                patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
+                patch.object(run_utils.sys, "prefix", str(prefix)),
+                patch.object(run_utils.site, "USER_BASE", str(userbase)),
+                patch.object(run_utils.shutil, "which", lambda _name: None),
+                patch.dict(os.environ, {"OPENSWARM_STATE_ROOT": str(base / "state")}, clear=False),
+                clean_marketplace_env(),
+            ):
+                values = run_utils._product_env_from_config()
+        finally:
+            os.chdir(old_cwd)
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ID") != "someone/project-swarm":
+            raise RuntimeError("OpenSwarm Python fallback did not prefer project marketplace metadata")
+        if values.get("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID") != "VRSEN/OpenSwarm":
+            raise RuntimeError("OpenSwarm Python fallback did not use project marketplace parent swarm id")
+        if values.get("AGENTSWARM_MARKETPLACE_SWARM_ORIGIN") != "fork":
+            raise RuntimeError("OpenSwarm Python fallback did not use project marketplace origin")
+
         with (
             patch.object(run_utils, "__file__", str(module_dir / "run_utils.py")),
             patch.object(run_utils.sys, "prefix", str(prefix)),
@@ -502,6 +529,7 @@ def smoke_product_state_root_env() -> None:
 
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -520,6 +548,7 @@ def smoke_product_state_root_env() -> None:
         (early / "openswarm.marketplace.json").write_text('{"swarmId":"","swarmOrigin":"fork"}\n', encoding="utf-8")
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -536,6 +565,7 @@ def smoke_product_state_root_env() -> None:
         (early / "openswarm.marketplace.json").write_text('{"swarmId":"openswarm","swarmOrigin":"fork"}\n', encoding="utf-8")
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -555,6 +585,7 @@ def smoke_product_state_root_env() -> None:
         )
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -574,6 +605,7 @@ def smoke_product_state_root_env() -> None:
         )
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -593,6 +625,7 @@ def smoke_product_state_root_env() -> None:
         )
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -612,6 +645,7 @@ def smoke_product_state_root_env() -> None:
         )
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),
@@ -631,6 +665,7 @@ def smoke_product_state_root_env() -> None:
         )
         with (
             patch.object(run_utils, "__file__", str(early / "run_utils.py")),
+            patch.object(run_utils.Path, "cwd", lambda: base),
             patch.object(run_utils.sys, "prefix", str(later)),
             patch.object(run_utils.site, "USER_BASE", str(userbase)),
             patch.object(run_utils.shutil, "which", lambda _name: None),

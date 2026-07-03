@@ -3,7 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 export const productVersion = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8")).version
-const marketplacePath = new URL("./openswarm.marketplace.json", import.meta.url)
+const packageMarketplacePath = new URL("./openswarm.marketplace.json", import.meta.url)
 const defaultMarketplace = {
   swarmId: "VRSEN/OpenSwarm",
   parentSwarmId: undefined,
@@ -41,11 +41,21 @@ function readGitHubRepo(value, key, opts) {
   return repo
 }
 
-function readMarketplaceFileMetadata() {
-  if (!fs.existsSync(marketplacePath)) return defaultMarketplace
+function marketplacePath(cwd) {
+  if (cwd) {
+    const projectPath = path.resolve(cwd, "openswarm.marketplace.json")
+    if (fs.existsSync(projectPath)) return projectPath
+  }
+  if (fs.existsSync(packageMarketplacePath)) return packageMarketplacePath
+  return undefined
+}
+
+function readMarketplaceFileMetadata(cwd) {
+  const source = marketplacePath(cwd)
+  if (!source) return defaultMarketplace
   let parsed
   try {
-    parsed = JSON.parse(fs.readFileSync(marketplacePath, "utf8"))
+    parsed = JSON.parse(fs.readFileSync(source, "utf8"))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`OpenSwarm marketplace metadata failed to load: ${message}`)
@@ -133,10 +143,11 @@ export function resolveStateRoot(env = process.env, platform = process.platform,
 }
 
 export function getProductEnv(opts = {}) {
+  const marketplace = readMarketplaceFileMetadata(opts.cwd ?? process.cwd())
   const activeMarketplace = {
-    swarmId: product.marketplaceSwarmId,
-    parentSwarmId: product.marketplaceParentSwarmId,
-    swarmOrigin: product.marketplaceSwarmOrigin,
+    swarmId: marketplace.swarmId,
+    parentSwarmId: marketplace.parentSwarmId,
+    swarmOrigin: marketplace.swarmOrigin,
   }
   const env = {
     AGENTSWARM_PRODUCT_DISPLAY_NAME: product.displayName,
