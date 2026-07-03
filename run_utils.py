@@ -159,7 +159,7 @@ def _marketplace_repo(values: dict[str, object], key: str, *, required: bool = T
     if len(parts) != 2:
         raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
     owner, name = parts
-    if name.endswith(".git"):
+    if name.lower().endswith(".git"):
         raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
     if not _GITHUB_OWNER_PATTERN.fullmatch(owner) or "--" in owner or not _GITHUB_REPOSITORY_NAME_PATTERN.fullmatch(name):
         raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")

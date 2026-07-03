@@ -32,7 +32,7 @@ function readGitHubRepo(value, key, opts) {
     throw new Error(`OpenSwarm marketplace metadata ${key} must be a GitHub owner/repo`)
   }
   const [owner, name] = parts
-  if (name.endsWith(".git")) {
+  if (name.toLowerCase().endsWith(".git")) {
     throw new Error(`OpenSwarm marketplace metadata ${key} must be a GitHub owner/repo`)
   }
   if (!githubOwnerPattern.test(owner) || owner.includes("--") || !githubRepositoryNamePattern.test(name)) {

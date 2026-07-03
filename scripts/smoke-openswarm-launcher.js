@@ -459,7 +459,7 @@ function assertMalformedMarketplaceMetadataFails() {
       { swarmId: '', swarmOrigin: 'fork' },
       { swarmId: 'openswarm', swarmOrigin: 'fork' },
       { swarmId: 'bad--owner/custom-swarm', swarmOrigin: 'original' },
-      { swarmId: 'someone/custom-swarm.git', swarmOrigin: 'original' },
+      { swarmId: 'someone/custom-swarm.GIT', swarmOrigin: 'original' },
       { swarmId: `owner/${'a'.repeat(129)}`, swarmOrigin: 'original' },
       { swarmId: 'someone/custom-swarm', swarmOrigin: 'fork' },
       { swarmId: 'someone/custom-swarm', parentSwarmId: 'VRSEN/OpenSwarm', swarmOrigin: 'copy' },
