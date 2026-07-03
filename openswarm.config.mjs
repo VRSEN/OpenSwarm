@@ -9,12 +9,8 @@ const defaultMarketplace = {
   parentSwarmId: undefined,
   swarmOrigin: "original",
 }
-const githubRepoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9._-]{1,100}$/
-const marketplaceEnv = {
-  swarmId: "OPENSWARM_MARKETPLACE_SWARM_ID",
-  parentSwarmId: "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID",
-  swarmOrigin: "OPENSWARM_MARKETPLACE_SWARM_ORIGIN",
-}
+const githubOwnerPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
+const githubRepositoryNamePattern = /^[A-Za-z0-9._-]{1,100}$/
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -31,7 +27,12 @@ function readString(value, key, { required = true } = {}) {
 function readGitHubRepo(value, key, opts) {
   const repo = readString(value, key, opts)
   if (repo === undefined) return undefined
-  if (!githubRepoPattern.test(repo)) {
+  const parts = repo.split("/")
+  if (parts.length !== 2) {
+    throw new Error(`OpenSwarm marketplace metadata ${key} must be a GitHub owner/repo`)
+  }
+  const [owner, name] = parts
+  if (!githubOwnerPattern.test(owner) || owner.includes("--") || !githubRepositoryNamePattern.test(name)) {
     throw new Error(`OpenSwarm marketplace metadata ${key} must be a GitHub owner/repo`)
   }
   return repo
@@ -59,26 +60,6 @@ function readMarketplaceFileMetadata() {
   }
   return {
     swarmId: readGitHubRepo(parsed.swarmId, "swarmId"),
-    parentSwarmId,
-    swarmOrigin,
-  }
-}
-
-function readMarketplaceEnv(env = process.env) {
-  const hasEnv = Object.values(marketplaceEnv).some((key) => typeof env[key] === "string" && env[key].trim() !== "")
-  if (!hasEnv) return undefined
-  const swarmOrigin = readString(env[marketplaceEnv.swarmOrigin], marketplaceEnv.swarmOrigin)
-  if (!["original", "fork", "unknown"].includes(swarmOrigin)) {
-    throw new Error("OpenSwarm marketplace metadata OPENSWARM_MARKETPLACE_SWARM_ORIGIN must be original, fork, or unknown")
-  }
-  const parentSwarmId = readGitHubRepo(env[marketplaceEnv.parentSwarmId], marketplaceEnv.parentSwarmId, {
-    required: false,
-  })
-  if (swarmOrigin === "fork" && parentSwarmId === undefined) {
-    throw new Error("OpenSwarm marketplace metadata OPENSWARM_MARKETPLACE_PARENT_SWARM_ID is required for fork swarms")
-  }
-  return {
-    swarmId: readGitHubRepo(env[marketplaceEnv.swarmId], marketplaceEnv.swarmId),
     parentSwarmId,
     swarmOrigin,
   }
@@ -149,7 +130,7 @@ export function resolveStateRoot(env = process.env, platform = process.platform,
 }
 
 export function getProductEnv(opts = {}) {
-  const activeMarketplace = readMarketplaceEnv(opts.env) ?? {
+  const activeMarketplace = {
     swarmId: product.marketplaceSwarmId,
     parentSwarmId: product.marketplaceParentSwarmId,
     swarmOrigin: product.marketplaceSwarmOrigin,

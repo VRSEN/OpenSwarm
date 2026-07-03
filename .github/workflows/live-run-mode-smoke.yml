@@ -7,6 +7,7 @@ on:
       - '.github/workflows/live-run-mode-smoke.yml'
       - 'bin/openswarm'
       - 'openswarm.config.mjs'
+      - 'openswarm.marketplace.json'
       - 'package-lock.json'
       - 'package.json'
       - 'pyproject.toml'

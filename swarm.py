@@ -37,12 +37,10 @@ if __name__ == "__main__":
 
 _configure_runtime()
 
-if __name__ == "__main__":
-    _configure_product_env()
-
 
 def create_agency(load_threads_callback=None):
     _configure_runtime()
+    _configure_product_env()
 
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage

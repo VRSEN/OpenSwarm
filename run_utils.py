@@ -8,11 +8,8 @@ import shutil
 import platform as platform_module
 from pathlib import Path
 
-_MARKETPLACE_ENV_KEYS = {
-    "swarmId": "OPENSWARM_MARKETPLACE_SWARM_ID",
-    "parentSwarmId": "OPENSWARM_MARKETPLACE_PARENT_SWARM_ID",
-    "swarmOrigin": "OPENSWARM_MARKETPLACE_SWARM_ORIGIN",
-}
+_GITHUB_OWNER_PATTERN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+_GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,100}")
 
 
 def _openswarm_state_root() -> Path:
@@ -97,7 +94,7 @@ def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     if not isinstance(package_values, dict) or not package_values.get("version"):
         raise RuntimeError("OpenSwarm package metadata is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
-    marketplace_env = _marketplace_env_from_process() or _marketplace_env_from_json(fallback.parent)
+    marketplace_env = _marketplace_env_from_json(fallback.parent)
     if marketplace_env:
         for key in (
             "AGENTSWARM_MARKETPLACE_SWARM_ID",
@@ -123,15 +120,6 @@ def _marketplace_env_from_json(root: Path) -> dict[str, str]:
         raise RuntimeError("OpenSwarm marketplace metadata must be a JSON object.")
 
     return _marketplace_env_from_values(values)
-
-
-def _marketplace_env_from_process() -> dict[str, str]:
-    if not any(os.getenv(key, "").strip() for key in _MARKETPLACE_ENV_KEYS.values()):
-        return {}
-    return _marketplace_env_from_values({
-        key: os.getenv(env_key)
-        for key, env_key in _MARKETPLACE_ENV_KEYS.items()
-    })
 
 
 def _marketplace_env_from_values(values: dict[str, object]) -> dict[str, str]:
@@ -167,7 +155,11 @@ def _marketplace_repo(values: dict[str, object], key: str, *, required: bool = T
     repo = _metadata_string(values, key, required=required)
     if repo is None:
         return None
-    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}", repo):
+    parts = repo.split("/")
+    if len(parts) != 2:
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
+    owner, name = parts
+    if not _GITHUB_OWNER_PATTERN.fullmatch(owner) or "--" in owner or not _GITHUB_REPOSITORY_NAME_PATTERN.fullmatch(name):
         raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
     return repo
 

@@ -7,6 +7,7 @@ on:
       - '.github/workflows/test-mac.yml'
       - 'bin/openswarm'
       - 'openswarm.config.mjs'
+      - 'openswarm.marketplace.json'
       - 'package.json'
       - 'package-lock.json'
       - 'run_utils.py'
