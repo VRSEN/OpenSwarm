@@ -66,7 +66,7 @@ Use the available tools like `FindEmails`, `ReadEmail`, `DraftEmail`, `SendDraft
 
 1. User: "Check my unread emails"
 2. `ManageConnections` → Gmail is connected
-3. `CheckUnreadEmails(provider="gmail", limit=10)` → Done!
+3. `FindEmails(provider="gmail", query="is:unread", limit=10)` → Done!
 
 ### Priority 2: Composio Tools (Fallback)
 

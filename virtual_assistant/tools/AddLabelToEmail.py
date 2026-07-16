@@ -23,7 +23,7 @@ class AddLabelToEmail(BaseTool):
     
     message_id: str = Field(
         ...,
-        description="The message ID to add labels to (obtained from CheckUnreadEmails)"
+        description="The message ID to add labels to (obtained from FindEmails)"
     )
     
     label_ids: List[str] = Field(
@@ -112,8 +112,8 @@ if __name__ == "__main__":
     print()
     
     # Get a message ID first
-    from virtual_assistant.tools.CheckUnreadEmails import CheckUnreadEmails
-    check_tool = CheckUnreadEmails(provider="gmail", limit=1)
+    from virtual_assistant.tools.FindEmails import FindEmails
+    check_tool = FindEmails(provider="gmail", query="is:unread", limit=1)
     result = check_tool.run()
     
     import json

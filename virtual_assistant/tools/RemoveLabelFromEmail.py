@@ -25,7 +25,7 @@ class RemoveLabelFromEmail(BaseTool):
     
     message_id: str = Field(
         ...,
-        description="The message ID to remove labels from (obtained from CheckUnreadEmails)"
+        description="The message ID to remove labels from (obtained from FindEmails)"
     )
     
     label_ids: List[str] = Field(
