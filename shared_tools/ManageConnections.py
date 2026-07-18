@@ -33,11 +33,9 @@ class ManageConnections(BaseTool):
             arguments["toolkits"] = self.toolkits
         if self.reinitiate_all:
             arguments["reinitiate_all"] = self.reinitiate_all
-        if self.session_id:
-            arguments["session_id"] = self.session_id
-
         result = execute_composio_tool(
             tool_name="COMPOSIO_MANAGE_CONNECTIONS",
             arguments=arguments,
+            session_id=self.session_id,
         )
         return str(result)

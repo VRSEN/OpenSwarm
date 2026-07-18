@@ -36,6 +36,14 @@ class ExecuteTool(BaseTool):
         # Workaround to avoid the agents SDK from stripping dynamic dictionary inputs:
         json_schema_extra={"type":"object","additionalProperties": True, "properties": {}}
     )
+
+    session_id: Optional[str] = Field(
+        None,
+        description=(
+            "Optional Composio session id returned by SearchTools or ManageConnections. "
+            "Pass it when executing a tool discovered or authorized in that session."
+        ),
+    )
     
     return_fields: Optional[List[str]] = Field(
         None,
@@ -49,6 +57,7 @@ class ExecuteTool(BaseTool):
             result = execute_composio_tool(
                 tool_name=self.tool_name,
                 arguments=self.arguments,
+                session_id=self.session_id,
             )
 
             if isinstance(result, dict) and result.get("error"):

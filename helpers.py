@@ -1,5 +1,6 @@
 import inspect
 import os
+from typing import Any
 
 from composio import Composio
 from composio_openai_agents import OpenAIAgentsProvider
@@ -9,6 +10,11 @@ from run_utils import _load_openswarm_dotenv
 _load_openswarm_dotenv()
 
 _composio_clients: dict[str, Composio] = {}
+
+# Meta tools (COMPOSIO_*) require a Tool Router session.  Keep the session ID
+# explicit at the tool boundary so callers can continue the same workflow
+# across separate Agency Swarm tool calls.
+_META_TOOL_PREFIX = "COMPOSIO_"
 
 
 def _refresh_runtime_env() -> None:
@@ -37,7 +43,56 @@ def get_composio_client() -> Composio | None:
     return client
 
 
-def execute_composio_tool(tool_name: str, arguments: dict):
+def get_composio_session(session_id: str | None = None) -> Any | dict:
+    """Create a Composio session or resume the supplied session."""
+    composio = get_composio_client()
+    user_id = get_composio_user_id()
+    if not composio:
+        return {"error": "COMPOSIO_API_KEY is not set."}
+    if not user_id:
+        return {"error": "COMPOSIO_USER_ID is not set."}
+
+    try:
+        if session_id:
+            return composio.use(session_id)
+        return composio.create(user_id=user_id)
+    except AttributeError:
+        return {
+            "error": (
+                "Composio sessions require composio>=0.13.0. "
+                "Install the version pinned in requirements.txt."
+            )
+        }
+    except Exception as exc:
+        return {"error": f"Unable to create or resume the Composio session: {exc}"}
+
+
+def execute_composio_session_tool(
+    tool_name: str,
+    arguments: dict,
+    session_id: str | None = None,
+):
+    """Execute a Composio meta or app tool inside one Tool Router session."""
+    session = get_composio_session(session_id)
+    if isinstance(session, dict) and session.get("error"):
+        return session
+
+    try:
+        result = session.execute(tool_name, arguments=arguments)
+        return {"session_id": session.session_id, "result": result}
+    except Exception as exc:
+        return {"error": f"Composio session tool execution failed: {exc}"}
+
+
+def execute_composio_tool(
+    tool_name: str,
+    arguments: dict,
+    session_id: str | None = None,
+):
+    """Execute a Composio tool, using a session when one is required."""
+    if session_id or tool_name.startswith(_META_TOOL_PREFIX):
+        return execute_composio_session_tool(tool_name, arguments, session_id)
+
     composio = get_composio_client()
     user_id = get_composio_user_id()
     if not composio:

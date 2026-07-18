@@ -31,10 +31,10 @@ Agents (except for Agent Swarm agent) can extend their functionality by adding c
 
 ### 5.2 Tool discovery sequence
 
-1. `ManageConnections` to check authentication/connected systems.
-2. `SearchTools` to discover candidate tools from intent.
+1. `ManageConnections` to check authentication/connected systems. Save the returned `session_id`.
+2. `SearchTools` to discover candidate tools from intent, passing that `session_id`.
 3. `FindTools` with `include_args=True` to inspect exact parameters.
-4.1. `ExecuteTool` for simple single-tool execution.
+4.1. `ExecuteTool` for simple single-tool execution; pass the same `session_id` for any tool discovered or authorized through Composio.
 4.2. `ProgrammaticToolCalling` only for complex multi-step edge cases.
 
 ### 5.3 Advanced queries
