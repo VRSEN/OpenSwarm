@@ -9,23 +9,23 @@ from __future__ import annotations
 import asyncio
 import base64
 import mimetypes
-import os
 import re
 import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from agency_swarm import Agent, ModelSettings, Reasoning
+from agency_swarm import Agent
 from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_image_from_path
-from agency_swarm.utils.openrouter import OPENROUTER_BASE_URL, build_openrouter_chat_model
-from agents.extensions.models.litellm_model import LitellmModel
-from openai import AsyncOpenAI
 from pydantic import Field
-from config import get_default_model
 from run_utils import _load_openswarm_dotenv
 
+from .internal_model import (
+    get_internal_agent_response,
+    make_internal_model,
+    make_internal_model_settings,
+)
 from .slide_file_utils import get_project_dir
 from .slide_html_utils import (
     ensure_full_html,
@@ -34,6 +34,7 @@ from .slide_html_utils import (
     _strip_html_to_text,
 )
 from .template_registry import load_template_index, save_template_index, template_path
+
 # Per-project locks for the template-index read-modify-write.
 _index_locks: dict[str, threading.Lock] = {}
 _index_locks_guard = threading.Lock()
@@ -221,51 +222,7 @@ def _embed_local_images_as_base64(html: str, project_dir: Path) -> str:
     return html
 
 
-_HTML_WRITER_MODEL_CLAUDE = "anthropic/claude-sonnet-4-6"
 _HTML_WRITER_MAX_ATTEMPTS = 3
-
-
-def _get_caller_info(tool) -> "tuple[AsyncOpenAI | None, str | None]":
-    """Return (openai_client, model_name_str) from the calling agent's context."""
-    ctx = getattr(tool, "_context", None)
-    master = getattr(ctx, "context", None)
-    agent_name = getattr(master, "current_agent_name", None)
-    agents = getattr(master, "agents", {})
-    agent = agents.get(agent_name) if agent_name else None
-    model = getattr(agent, "model", None)
-    client = None
-    for attr in ("_client", "openai_client", "client"):
-        maybe = getattr(model, attr, None)
-        if isinstance(maybe, AsyncOpenAI):
-            client = maybe
-            break
-    model_name = model if isinstance(model, str) else getattr(model, "model", None)
-    if not isinstance(model_name, str):
-        model_name = None
-    return client, model_name, model
-
-
-class _CodexResponsesModel:
-    """Subclass of OpenAIResponsesModel that strips parameters unsupported by the Codex endpoint."""
-
-    _cls = None
-
-    @classmethod
-    def _get_cls(cls):
-        if cls._cls is None:
-            from agents import OpenAIResponsesModel
-            from dataclasses import replace
-
-            class _Impl(OpenAIResponsesModel):
-                async def _fetch_response(self, system_instructions, input, model_settings, *args, **kwargs):
-                    model_settings = replace(model_settings, truncation=None)
-                    return await super()._fetch_response(system_instructions, input, model_settings, *args, **kwargs)
-
-            cls._cls = _Impl
-        return cls._cls
-
-    def __new__(cls, model: str, openai_client):
-        return cls._get_cls()(model=model, openai_client=openai_client)
 
 
 def _register_sub_agent_usage(tool, agent_model, result) -> None:
@@ -287,119 +244,26 @@ def _register_sub_agent_usage(tool, agent_model, result) -> None:
         pass
 
 
-async def _agent_get_response(
-    agent: Agent,
-    prompt: str,
-    *,
-    use_stream: bool = False,
-    on_delta: "Callable[[str], None] | None" = None,
-):
-    """Call agent.get_response or stream-based equivalent.
-
-    Codex endpoint requires stream=True; use get_response_stream() in that case.
-    on_delta, if provided, forces streaming and is called for each text token.
-    """
-    if use_stream or on_delta is not None:
-        stream = agent.get_response_stream(prompt)
-        text_deltas: list[str] = []
-        async for event in stream:
-            data = getattr(event, "data", None)
-            if data is not None and getattr(data, "type", None) == "response.output_text.delta":
-                delta = getattr(data, "delta", None)
-                if delta and isinstance(delta, str):
-                    text_deltas.append(delta)
-                    if on_delta is not None:
-                        try:
-                            on_delta(delta)
-                        except Exception:
-                            pass
-        result = await stream.wait_final_result()
-        fo = getattr(result, "final_output", None) if result is not None else None
-        if not fo and text_deltas:
-            assembled = "".join(text_deltas)
-            _raw = getattr(result, "raw_responses", []) or []
-
-            class _R:
-                final_output = assembled
-                raw_responses = _raw
-
-            return _R()
-        return result
-    return await agent.get_response(prompt)
-
-
 def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one ModifySlide call.
 
     Model priority:
-    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (explicit key)
-    2. Non-OpenAI DEFAULT_MODEL (e.g. anthropic/claude-*) → LiteLLM
-    3. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
-    4. AsyncOpenAI() default (env vars)
+    1. Request-level RunConfig model
+    2. Calling agent's selected model and transport
+    3. DEFAULT_MODEL from the OpenSwarm environment
 
     Returns (agent, is_codex).
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    is_codex = False
-    is_openrouter = False
-    model = None
-    if anthropic_key:
-        model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
-    else:
-        from agents import OpenAIResponsesModel
-        from openai import AsyncOpenAI
-        caller_client, caller_model_name, caller_model_obj = tool and _get_caller_info(tool) or (None, None, None)
-        if caller_client is None:
-            # When the calling agent uses a string model its client isn't on the model
-            # object. Fall back to the SDK global default client (set by Codex browser
-            # auth) so we can copy credentials into a fresh thread-safe client.
-            try:
-                from agents.models._openai_shared import get_default_openai_client as _sdk_default
-                caller_client = _sdk_default()
-            except Exception:
-                pass
-        if caller_model_obj is not None and not isinstance(caller_model_obj, str) and caller_client is None:
-            # Non-OpenAI provider (e.g. LiteLLM/Anthropic) — reuse the caller's model directly
-            model = caller_model_obj
-        else:
-            if caller_client:
-                _STD_HDR_PREFIXES = (
-                    "accept", "content-type", "user-agent",
-                    "x-stainless-", "openai-",
-                )
-                extra_headers = {
-                    k: v for k, v in caller_client.default_headers.items()
-                    if not any(k.lower().startswith(p) for p in _STD_HDR_PREFIXES)
-                }
-                client = AsyncOpenAI(
-                    api_key=caller_client.api_key,
-                    base_url=str(caller_client.base_url),
-                    default_headers=extra_headers if extra_headers else None,
-                )
-            else:
-                client = AsyncOpenAI()
-            model_name = caller_model_name or get_default_model()
-            is_openrouter = str(client.base_url).rstrip("/") == OPENROUTER_BASE_URL.rstrip("/")
-            is_codex = not is_openrouter and not str(client.base_url).startswith("https://api.openai.com")
-            if is_openrouter:
-                model = build_openrouter_chat_model(model_name, openai_client=client)
-            elif is_codex:
-                model = _CodexResponsesModel(model=model_name, openai_client=client)
-            else:
-                model = OpenAIResponsesModel(model=model_name, openai_client=client)
+    route = make_internal_model(tool)
     agent = Agent(
         name="Slide HTML Writer",
         description="Generates complete slide HTML from task briefs.",
         instructions=_read_html_writer_instructions(),
         tools=[],
-        model=model,
-        model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto" if not is_openrouter else None),
-            verbosity=None if (is_codex or is_openrouter) else "medium",
-            store=False if is_codex else None,
-        ),
+        model=route.model,
+        model_settings=make_internal_model_settings(route),
     )
-    return agent, is_codex
+    return agent, route.is_codex
 
 
 def _extract_html_from_output(text: str) -> str:
@@ -706,8 +570,9 @@ class ModifySlide(BaseTool):
                 )
 
                 try:
-                    final_result = await _agent_get_response(
-                        writer, prompt,
+                    final_result = await get_internal_agent_response(
+                        writer,
+                        prompt,
                         use_stream=is_codex,
                         on_delta=_on_delta if attempt == 1 else None,
                     )
