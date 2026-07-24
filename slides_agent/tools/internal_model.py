@@ -252,7 +252,11 @@ def make_internal_model(tool: Any) -> InternalModelRoute:
     client = _clone_openai_client(source_client)
     openrouter_name = get_openrouter_model_name(source)
     if openrouter_name or is_openrouter_model_name(model_name):
-        alias = model_name if is_openrouter_model_name(model_name) else openrouter_name
+        alias = (
+            model_name
+            if is_openrouter_model_name(model_name)
+            else f"openrouter/{model_name}"
+        )
         return InternalModelRoute(
             model=build_openrouter_chat_model(
                 alias,
@@ -292,6 +296,10 @@ def make_internal_model(tool: Any) -> InternalModelRoute:
 
 def make_internal_model_settings(route: InternalModelRoute) -> ModelSettings:
     """Use OpenAI-only settings only on verified Responses transports."""
+    if route.transport == "openrouter":
+        return ModelSettings(
+            reasoning=Reasoning(effort="high", summary=None),
+        )
     if route.transport not in {"openai_responses", "codex_responses"}:
         return ModelSettings()
     return ModelSettings(

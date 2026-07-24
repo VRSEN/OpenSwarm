@@ -381,22 +381,38 @@ class SlidesInternalModelTests(unittest.TestCase):
             "openrouter/anthropic/claude-sonnet-4.6"
         )
 
-        agents, codex = nested_agents(modify, insert, tool_for(source))
+        cases = (
+            (None, "anthropic/claude-sonnet-4.6"),
+            ("openai/gpt-5.4-mini", "openai/gpt-5.4-mini"),
+        )
+        for run_model, expected_model in cases:
+            with self.subTest(run_model=run_model):
+                agents, codex = nested_agents(
+                    modify,
+                    insert,
+                    tool_for(source, run_model=run_model),
+                )
 
-        self.assertEqual(codex, (False, False))
-        for agent in agents:
-            self.assertIsInstance(agent.model, FakeChatModel)
-            self.assertEqual(agent.model.model, "anthropic/claude-sonnet-4.6")
-            self.assertEqual(
-                agent.model._agency_swarm_openrouter_model_name,
-                "openrouter/anthropic/claude-sonnet-4.6",
-            )
-            self.assertEqual(agent.model._client.api_key, "openrouter-key")
-            self.assertEqual(
-                agent.model.should_replay_reasoning_content,
-                "replay",
-            )
-            self.assertEqual(agent.kwargs["model_settings"].kwargs, {})
+                self.assertEqual(codex, (False, False))
+                for agent in agents:
+                    self.assertIsInstance(agent.model, FakeChatModel)
+                    self.assertEqual(agent.model.model, expected_model)
+                    self.assertEqual(
+                        agent.model._agency_swarm_openrouter_model_name,
+                        f"openrouter/{expected_model}",
+                    )
+                    self.assertEqual(agent.model._client.api_key, "openrouter-key")
+                    self.assertEqual(
+                        agent.model.should_replay_reasoning_content,
+                        "replay",
+                    )
+                    settings = agent.kwargs["model_settings"]
+                    self.assertEqual(
+                        settings.reasoning.kwargs,
+                        {"effort": "high", "summary": None},
+                    )
+                    self.assertIsNone(settings.verbosity)
+                    self.assertIsNone(settings.store)
 
     def test_litellm_and_ollama_routes_preserve_wrapper_config(self):
         _internal, modify, insert = load_slides_tools()
@@ -452,7 +468,7 @@ class SlidesInternalModelTests(unittest.TestCase):
             self.assertEqual(agent.model._client.api_key, "gateway-key")
 
     def test_streamed_text_is_returned_when_final_result_is_empty(self):
-        internal, _modify, _insert = load_slides_tools()
+        internal, _modify, insert = load_slides_tools()
 
         class Stream:
             def __init__(self):
