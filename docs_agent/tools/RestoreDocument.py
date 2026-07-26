@@ -5,7 +5,7 @@ from pathlib import Path
 from agency_swarm.tools import BaseTool
 from pydantic import Field
 
-from .utils.doc_file_utils import get_project_dir
+from .utils.doc_file_utils import get_project_dir, normalize_docx_filename
 
 
 class RestoreDocument(BaseTool):
@@ -42,35 +42,34 @@ class RestoreDocument(BaseTool):
     )
 
     def run(self) -> str:
-        project_dir = get_project_dir(self.project_name)
-        docx_name = (
-            self.docx_filename
-            if self.docx_filename.endswith(".docx")
-            else f"{self.docx_filename}.docx"
-        )
-        snapshot_path = project_dir / f"{docx_name}.snapshot.html"
+        try:
+            project_dir = get_project_dir(self.project_name)
+            docx_name = normalize_docx_filename(self.docx_filename)
+            snapshot_path = project_dir / f"{docx_name}.snapshot.html"
 
-        if not snapshot_path.exists():
-            available = sorted(
-                p.name for p in project_dir.glob("*.docx.snapshot.html")
+            if not snapshot_path.exists():
+                available = sorted(
+                    p.name for p in project_dir.glob("*.docx.snapshot.html")
+                )
+                hint = (
+                    "\nAvailable snapshots:\n" + "\n".join(f"  {s}" for s in available)
+                    if available
+                    else "\nNo snapshots found in this project."
+                )
+                return f"Error: No snapshot found for '{docx_name}'.{hint}"
+
+            doc_name = Path(docx_name).stem
+            doc_name = _strip_version(doc_name)
+            source_path = project_dir / f"{doc_name}.source.html"
+
+            source_path.write_text(snapshot_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+            return (
+                f"Restored '{doc_name}' to the version captured in '{docx_name}'.\n"
+                f"Working source: {source_path}"
             )
-            hint = (
-                "\nAvailable snapshots:\n" + "\n".join(f"  {s}" for s in available)
-                if available
-                else "\nNo snapshots found in this project."
-            )
-            return f"Error: No snapshot found for '{docx_name}'.{hint}"
-
-        doc_name = Path(docx_name).stem
-        doc_name = _strip_version(doc_name)
-        source_path = project_dir / f"{doc_name}.source.html"
-
-        source_path.write_text(snapshot_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-        return (
-            f"Restored '{doc_name}' to the version captured in '{docx_name}'.\n"
-            f"Working source: {source_path}"
-        )
+        except Exception as e:
+            return f"Error restoring document: {str(e)}"
 
 
 def _strip_version(stem: str) -> str:
