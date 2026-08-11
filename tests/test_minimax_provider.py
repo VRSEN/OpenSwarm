@@ -142,15 +142,17 @@ class TestEnvExample:
     def test_region_documented(self):
         assert "MINIMAX_REGION" in self._content()
 
-    def test_both_models_documented(self):
-        content = self._content()
-        assert "MiniMax-M3" in content
-        assert "MiniMax-M2.7" in content
-
-    def test_both_routes_documented(self):
-        content = self._content()
-        assert "minimax/MiniMax-M3" in content
-        assert "anthropic/MiniMax-M3" in content
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "minimax/MiniMax-M3",
+            "minimax/MiniMax-M2.7",
+            "anthropic/MiniMax-M3",
+            "anthropic/MiniMax-M2.7",
+        ],
+    )
+    def test_models_documented_for_both_routes(self, model):
+        assert model in self._content()
 
     def test_both_regions_documented(self):
         content = self._content()
