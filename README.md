@@ -101,6 +101,10 @@ The setup wizard walks you through everything, but you'll need at least one of t
 - `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
 - `ANTHROPIC_API_KEY` - For Claude models
 
+**Alternative primary provider:**
+
+- `ORCAROUTER_API_KEY` - Route all agents through the [OrcaRouter](https://www.orcarouter.ai) OpenAI-compatible gateway instead. Set `DEFAULT_MODEL=orcarouter/<model>` (e.g. `orcarouter/gpt-5.6-luna`). Get a key at https://www.orcarouter.ai
+
 **Optional superpowers:**
 
 - `COMPOSIO_API_KEY` - Unlock 10,000+ integrations (Gmail, Slack, GitHub, etc.)
