@@ -4,13 +4,11 @@ import asyncio
 import logging
 import os
 import re
-import cv2
 import httpx
 from typing import Annotated, Literal, Optional, Union
 
 import fal_client
 from pydantic import BaseModel, Field, field_validator
-from google.genai import types
 from PIL import Image
 
 from agency_swarm import BaseTool, ToolOutputText
@@ -238,6 +236,8 @@ class EditVideoContent(BaseTool):
         return save_video_with_metadata(client, video.id, self.name, self.product_name)
 
     async def _run_extend(self, payload: ExtendMode) -> list:
+        from google.genai import types  # lazy: avoid SIGILL at import time (see #38)
+
         client = get_gemini_client()
         loop = asyncio.get_event_loop()
 
@@ -347,6 +347,8 @@ class EditVideoContent(BaseTool):
                             out_file.write(chunk)
 
     def _extract_first_frame(self, video_path: str, output_path: str):
+        import cv2  # lazy: avoid SIGILL at import/agency-construction time (see #38)
+
         cap = cv2.VideoCapture(video_path)
         ret, frame = cap.read()
         cap.release()

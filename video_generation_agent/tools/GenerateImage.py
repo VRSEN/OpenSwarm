@@ -4,7 +4,6 @@ import asyncio
 import os
 from typing import Literal
 
-from google import genai
 from pydantic import Field, field_validator
 
 from agency_swarm import BaseTool
@@ -77,6 +76,8 @@ class GenerateImage(BaseTool):
 
     async def run(self) -> list:
         """Generate images using the Gemini API."""
+        from google import genai  # lazy: avoid SIGILL at import time (see #38)
+
         _load_openswarm_dotenv(override=True)
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:

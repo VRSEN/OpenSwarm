@@ -3,7 +3,6 @@
 import os
 import subprocess
 import asyncio
-import cv2
 from typing import Optional
 from pathlib import Path
 
@@ -146,6 +145,8 @@ class EditAudio(BaseTool):
     
     def _mix_audio_video_blocking(self, audio_path: str, video_path: str, output_path: str) -> None:
         """Mix audio and video using ffmpeg (blocking operation)."""
+        import cv2  # lazy: avoid SIGILL at import/agency-construction time (see #38)
+
         cap_audio = cv2.VideoCapture(audio_path)
         fps_audio = cap_audio.get(cv2.CAP_PROP_FPS)
         frames_audio = int(cap_audio.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -249,6 +250,8 @@ class EditAudio(BaseTool):
     
     def _extract_first_frame(self, video_path: str, output_path: str) -> Optional[object]:
         """Extract the first frame from video as thumbnail."""
+        import cv2  # lazy: avoid SIGILL at import/agency-construction time (see #38)
+
         cap = cv2.VideoCapture(video_path)
         ret, frame = cap.read()
         cap.release()

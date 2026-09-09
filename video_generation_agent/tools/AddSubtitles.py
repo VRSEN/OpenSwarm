@@ -8,9 +8,7 @@ from pydantic import Field, field_validator
 
 from agency_swarm import BaseTool
 from shared_tools.openai_client_utils import get_openai_client
-from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 from PIL import Image, ImageDraw, ImageFont
-import numpy as np
 from openai import OpenAI
 
 from .utils.video_utils import get_videos_dir
@@ -82,6 +80,13 @@ class AddSubtitles(BaseTool):
 
     def run(self) -> str:
         """Add animated subtitles to the video using Whisper for timing."""
+        from moviepy.editor import (  # lazy: avoid SIGILL at import time (see #38)
+            CompositeVideoClip,
+            ImageClip,
+            VideoFileClip,
+        )
+        import numpy as np  # lazy: avoid native import at agency-construction time
+
         videos_dir = get_videos_dir(self.product_name)
         video_path = os.path.join(videos_dir, f"{self.video_name}.mp4")
 

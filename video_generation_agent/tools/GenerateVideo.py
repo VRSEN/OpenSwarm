@@ -13,7 +13,6 @@ import fal_client
 import httpx
 from openai import OpenAI
 from pydantic import Field, field_validator, model_validator
-from google.genai.types import GenerateVideosConfig, Image, VideoGenerationReferenceImage
 from PIL import Image as PILImage
 from io import BytesIO
 
@@ -266,6 +265,11 @@ class GenerateVideo(BaseTool):
 
     async def _generate_with_veo(self, model: str) -> dict:
         """Generate video using Google's Veo API with optional references."""
+        from google.genai.types import (  # lazy: avoid SIGILL at import time (see #38)
+            GenerateVideosConfig,
+            Image,
+            VideoGenerationReferenceImage,
+        )
 
         client = get_gemini_client()
         

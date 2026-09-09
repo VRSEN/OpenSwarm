@@ -11,11 +11,9 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-import cv2
 import httpx
 from openai import OpenAI
 from PIL import Image
-from google import genai
 
 from agency_swarm import ToolOutputText, ToolOutputImage
 from shared_tools.model_availability import video_model_availability_message
@@ -94,6 +92,8 @@ from shared_tools.openai_client_utils import get_openai_client
 
 def get_gemini_client():
     """Instantiate a Gemini client from the environment."""
+    from google import genai
+
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError(
@@ -322,6 +322,8 @@ def extract_last_frame(video_path: str, output_path: str) -> Optional[Image.Imag
     Returns:
         PIL Image object of the last frame, or None if extraction failed
     """
+    import cv2  # lazy: defer native OpenCV import until actually needed (see #38)
+
     logger.info("Extracting last frame from video...")
     cap = cv2.VideoCapture(video_path)
     
@@ -358,6 +360,8 @@ def generate_spritesheet(video_path: str, output_path: str, frames_per_row: int 
     Returns:
         PIL Image object of the spritesheet, or None if generation failed
     """
+    import cv2  # lazy: defer native OpenCV import until actually needed (see #38)
+
     logger.info("Generating spritesheet from video...")
     cap = cv2.VideoCapture(video_path)
     
@@ -439,6 +443,8 @@ def save_veo_video_with_metadata(gemini_client, video_file, name: str, product_n
     Returns:
         List of ToolOutput objects showing the saved files
     """
+    import cv2  # lazy: defer native OpenCV import until actually needed (see #38)
+
     output = []
     videos_dir = get_videos_dir(product_name)
 
