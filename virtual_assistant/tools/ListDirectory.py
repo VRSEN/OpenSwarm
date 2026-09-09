@@ -9,6 +9,9 @@ class ListDirectory(BaseTool):
     """
     Lists files and directories in a given path.
     Use this tool to explore the project structure and understand the codebase layout.
+    When the user refers to their codebase/project without giving a path, use
+    their launch directory (the process working directory) — never default to
+    the installed package directory (see #15).
     """
 
     directory_path: str = Field(
@@ -101,10 +104,11 @@ class ListDirectory(BaseTool):
 
 
 if __name__ == "__main__":
-    # Test the tool with current directory
+    # Test the tool with the launch directory (the user's codebase root),
+    # not the installed package directory (see #15).
     import pathlib
 
-    current_dir = str(pathlib.Path(__file__).parent.parent.absolute())
+    current_dir = str(pathlib.Path.cwd())
 
     tool = ListDirectory(directory_path=current_dir, recursive=True)
     print("Listing directory structure:")
