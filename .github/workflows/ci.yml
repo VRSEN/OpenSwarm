@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  python-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile-check Python entry points
+        run: |
+          python -m py_compile \
+            run_utils.py \
+            swarm.py \
+            server.py \
+            config.py \
+            helpers.py \
+            slides_preview_server.py \
+            scripts/smoke-bootstrap.py \
+            scripts/smoke-wheel-bootstrap.py
+
+      - name: Install pytest only (unit tests are stdlib-only)
+        run: python -m pip install "pytest>=8.0.0"
+
+      - name: Run unit tests
+        run: python -m pytest tests/test_slides_internal_models.py -v
+
+  launcher-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax-check launcher and config
+        run: |
+          node --check bin/openswarm
+          node --check openswarm.config.mjs
+          node --check scripts/write-product-env.mjs
+
+      - name: Smoke-test launcher platform resolution
+        run: node scripts/smoke-openswarm-launcher.js
