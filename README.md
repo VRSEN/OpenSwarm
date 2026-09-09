@@ -138,6 +138,11 @@ cp .env.example .env        # Add your API keys
 docker-compose up --build
 ```
 
+Docker reads `.env` via `env_file` in `docker-compose.yml`. For API bearer auth,
+set `APP_TOKEN` (or `API_TOKEN` as an alias — the server uses `API_TOKEN` only
+when `APP_TOKEN` is empty). Model keys such as `OPENAI_API_KEY` are never used
+as HTTP auth tokens.
+
 **API server:**
 
 ```bash

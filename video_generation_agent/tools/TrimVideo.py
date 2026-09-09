@@ -3,7 +3,6 @@
 import os
 import subprocess
 import asyncio
-import cv2
 from typing import Optional
 from pathlib import Path
 
@@ -146,6 +145,8 @@ class TrimVideo(BaseTool):
     
     def _trim_video_blocking(self, input_path: str, output_path: str) -> None:
         """Trim video using ffmpeg (blocking operation)."""
+        import cv2  # lazy: avoid SIGILL at import/agency-construction time (see #38)
+
         cap = cv2.VideoCapture(input_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -200,6 +201,8 @@ class TrimVideo(BaseTool):
     
     def _extract_first_frame(self, video_path: str, output_path: str) -> Optional[object]:
         """Extract the first frame from video as thumbnail."""
+        import cv2  # lazy: avoid SIGILL at import/agency-construction time (see #38)
+
         cap = cv2.VideoCapture(video_path)
         ret, frame = cap.read()
         cap.release()

@@ -5,7 +5,6 @@ from typing import Literal
 from pathlib import Path
 
 import os
-from google import genai
 from PIL import Image
 from pydantic import Field, field_validator
 
@@ -92,6 +91,8 @@ class CombineImages(BaseTool):
 
     async def run(self) -> list:
         """Combine images using the Gemini API."""
+        from google import genai  # lazy: avoid SIGILL at import time (see #38)
+
         _load_openswarm_dotenv(override=True)
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:

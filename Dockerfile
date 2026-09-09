@@ -1,8 +1,12 @@
-FROM python:3.13-slim
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    OPENBLAS_CORETYPE=Haswell \
+    OPENBLAS_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1
 
 
 # Keep a deterministic PATH (avoid `${PATH}` evaluation issues in some BuildKit setups).
