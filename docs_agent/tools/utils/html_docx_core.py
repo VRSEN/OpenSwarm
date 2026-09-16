@@ -19,7 +19,9 @@ from .html_docx_selectors import _compute_style_map, _extract_css_rules
 from .html_docx_shared import _remove_trailing_empty_paragraph
 
 
-def html_to_docx(html_content: str, output_path: Path) -> None:
+def html_to_docx(html_content: str, output_path: Path, base_dir: Optional[Path] = None) -> None:
+    if base_dir is None:
+        base_dir = output_path.parent
     doc = Document()
     _set_default_paragraph_style(doc)
     _apply_page_settings(doc, html_content)
@@ -34,7 +36,7 @@ def html_to_docx(html_content: str, output_path: Path) -> None:
     _ensure_display_background_shape(doc)
     content_root = _unwrap_layout_table(body) or body
     for child in content_root.children:
-        _handle_block(child, doc, css_rules, body_style, table_auto_widths)
+        _handle_block(child, doc, css_rules, body_style, table_auto_widths, base_dir)
 
     # When the document body starts with a table, Word renders an implicit gap above it.
     # Inserting a 1pt-height anchor paragraph before the first table eliminates that gap.

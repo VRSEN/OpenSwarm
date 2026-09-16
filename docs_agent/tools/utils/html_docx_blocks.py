@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict, Optional
 
 from bs4.element import Comment, NavigableString, Tag
@@ -19,7 +20,7 @@ from .html_docx_selectors import _compute_style_map
 _SKIP_TAGS = {"style", "script", "head", "meta", "link", "title", "noscript"}
 
 
-def _handle_block(node, target, css_rules, parent_style: Dict[str, str], table_auto_widths) -> None:
+def _handle_block(node, target, css_rules, parent_style: Dict[str, str], table_auto_widths, base_dir: Optional[Path] = None) -> None:
     target_container = _ensure_container(target)
     if isinstance(node, Comment):
         return
@@ -41,7 +42,7 @@ def _handle_block(node, target, css_rules, parent_style: Dict[str, str], table_a
     if node.name == "img":
         paragraph = _ensure_paragraph(target_container)
         _apply_paragraph_style(paragraph, parent_style)
-        _add_image_run(paragraph, node, parent_style)
+        _add_image_run(paragraph, node, parent_style, base_dir)
         return
 
     if node.name == "svg":
@@ -61,15 +62,15 @@ def _handle_block(node, target, css_rules, parent_style: Dict[str, str], table_a
 
         if _should_wrap_container(node, current_style):
             container = _add_container(
-                target_container, node, current_style, css_rules, table_auto_widths
+                target_container, node, current_style, css_rules, table_auto_widths, base_dir
             )
             for child in node.children:
-                _handle_block(child, container, css_rules, current_style, table_auto_widths)
+                _handle_block(child, container, css_rules, current_style, table_auto_widths, base_dir)
             return
 
         if _has_block_children(node):
             for child in node.children:
-                _handle_block(child, target_container, css_rules, current_style, table_auto_widths)
+                _handle_block(child, target_container, css_rules, current_style, table_auto_widths, base_dir)
             return
 
         paragraph = _ensure_paragraph(
@@ -83,19 +84,19 @@ def _handle_block(node, target, css_rules, parent_style: Dict[str, str], table_a
             # Apply the parent <ul> margin-left as additional left indent so the
             # list is offset the same amount it is in the HTML rendering.
             _apply_ul_margin_indent(paragraph, _resolve_list_indent_pt(parent_style))
-        _add_inline_runs(node, paragraph, css_rules, current_style)
+        _add_inline_runs(node, paragraph, css_rules, current_style, base_dir)
         return
 
     if node.name in _INLINE_TAGS:
         paragraph = _ensure_paragraph(target_container)
-        _add_inline_runs(node, paragraph, css_rules, parent_style)
+        _add_inline_runs(node, paragraph, css_rules, parent_style, base_dir)
         return
 
     for child in node.children:
-        _handle_block(child, target_container, css_rules, parent_style, table_auto_widths)
+        _handle_block(child, target_container, css_rules, parent_style, table_auto_widths, base_dir)
 
 
-def _add_inline_runs(node, paragraph, css_rules, parent_style: Dict[str, str]) -> None:
+def _add_inline_runs(node, paragraph, css_rules, parent_style: Dict[str, str], base_dir: Optional[Path] = None) -> None:
     if isinstance(node, Comment):
         return
     if isinstance(node, NavigableString):
@@ -116,7 +117,7 @@ def _add_inline_runs(node, paragraph, css_rules, parent_style: Dict[str, str]) -
         return
 
     if node.name == "img":
-        _add_image_run(paragraph, node, parent_style)
+        _add_image_run(paragraph, node, parent_style, base_dir)
         return
 
     if node.name == "svg":
@@ -138,7 +139,7 @@ def _add_inline_runs(node, paragraph, css_rules, parent_style: Dict[str, str]) -
             current_style = {**current_style, "text-decoration": "underline"}
 
     for child in node.children:
-        _add_inline_runs(child, paragraph, css_rules, current_style)
+        _add_inline_runs(child, paragraph, css_rules, current_style, base_dir)
 
 
 def _transform_text(text: str, style_map: Dict[str, str]) -> str:
@@ -184,7 +185,7 @@ def _should_wrap_container(node: Tag, style_map: Dict[str, str]) -> bool:
     return False
 
 
-def _add_container(target, node: Tag, style_map: Dict[str, str], css_rules, table_auto_widths):
+def _add_container(target, node: Tag, style_map: Dict[str, str], css_rules, table_auto_widths, base_dir: Optional[Path] = None):
     from .html_docx_tables import _apply_cell_styles, _apply_table_styles
 
     if style_map.get("display", "").strip().lower() == "flex":
@@ -197,9 +198,9 @@ def _add_container(target, node: Tag, style_map: Dict[str, str], css_rules, tabl
             _apply_cell_styles(left_cell, style_map)
             _apply_cell_styles(right_cell, style_map)
             for child in children[0].children:
-                _handle_block(child, left_cell, css_rules, style_map, table_auto_widths)
+                _handle_block(child, left_cell, css_rules, style_map, table_auto_widths, base_dir)
             for child in children[1].children:
-                _handle_block(child, right_cell, css_rules, style_map, table_auto_widths)
+                _handle_block(child, right_cell, css_rules, style_map, table_auto_widths, base_dir)
             return table
 
     table = target.add_table(rows=1, cols=1)
