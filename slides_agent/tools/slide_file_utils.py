@@ -4,8 +4,71 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 import re
 import uuid
+
+
+ALLOWED_IMAGE_EXTENSIONS = frozenset(
+    {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg", ".ico", ".avif"}
+)
+
+MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
+IMAGE_CHUNK_SIZE = 64 * 1024
+
+_WINDOWS_DRIVE_RE = re.compile(r"^[a-zA-Z]:")
+
+
+def validate_project_name(project_name: str) -> str:
+    """Validate a presentation project name (single path segment)."""
+    if not isinstance(project_name, str) or not project_name.strip():
+        raise ValueError("Error: project_name must not be empty.")
+    name = project_name.strip()
+    if "\x00" in name:
+        raise ValueError("Error: invalid project_name (null byte).")
+    if "/" in name or "\\" in name:
+        raise ValueError(
+            f"Error: invalid project_name {name!r}: must be a plain directory name without path separators."
+        )
+    if Path(name).is_absolute() or _WINDOWS_DRIVE_RE.match(name):
+        raise ValueError(f"Error: invalid project_name {name!r}: absolute paths are not allowed.")
+    if name in (".", "..") or ".." in Path(name.replace("\\", "/")).parts:
+        raise ValueError(f"Error: invalid project_name {name!r}: parent references are not allowed.")
+    return name
+
+
+def sanitize_image_filename(image_name: str, url: str = "") -> str:
+    """Validate *image_name* and return a safe basename with an allowlisted extension."""
+    if not isinstance(image_name, str) or not image_name.strip():
+        raise ValueError("Error: image_name must not be empty.")
+    raw = image_name.strip()
+    if "\x00" in raw:
+        raise ValueError("Error: invalid image_name (null byte).")
+    if "/" in raw or "\\" in raw:
+        raise ValueError(
+            "Error: image_name must be a plain filename without path separators "
+            "(blocked possible path traversal)."
+        )
+    if Path(raw).is_absolute() or _WINDOWS_DRIVE_RE.match(raw):
+        raise ValueError("Error: image_name must be a plain filename (absolute paths are not allowed).")
+    base = Path(raw.replace("\\", "/")).name
+    if not base or base in (".", ".."):
+        raise ValueError("Error: image_name must be a plain filename.")
+    if ".." in Path(base).parts:
+        raise ValueError("Error: image_name must not contain parent references.")
+    suffix = Path(base).suffix.lower()
+    if suffix:
+        if suffix not in ALLOWED_IMAGE_EXTENSIONS:
+            allowed = ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS))
+            raise ValueError(
+                f"Error: unsupported image extension {suffix!r}. Allowed: {allowed}."
+            )
+        return base
+    url_ext = Path(urlparse(url).path).suffix.lower() if url else ""
+    if url_ext in ALLOWED_IMAGE_EXTENSIONS:
+        return base + url_ext
+    return base + ".png"
 
 
 _SENTINEL_RE = re.compile(
