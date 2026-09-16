@@ -131,7 +131,7 @@ class ConvertDocument(BaseTool):
             if self.output_format == "pdf":
                 self._convert_to_pdf(html_content, output_path)
             elif self.output_format == "docx":
-                self._convert_to_docx(html_content, output_path)
+                self._convert_to_docx(html_content, output_path, base_dir=project_dir)
             elif self.output_format == "markdown":
                 self._convert_to_markdown(html_content, output_path)
             elif self.output_format == "txt":
@@ -171,9 +171,9 @@ Path: {output_path}"""
         """Convert HTML to PDF using weasyprint."""
         HTML(string=_normalize_unicode(html_content)).write_pdf(output_path)
 
-    def _convert_to_docx(self, html_content: str, output_path: Path):
+    def _convert_to_docx(self, html_content: str, output_path: Path, base_dir: Path | None = None):
         """Convert HTML to DOCX using the internal converter."""
-        html_to_docx(html_content, output_path)
+        html_to_docx(html_content, output_path, base_dir=base_dir)
     
     def _convert_to_markdown(self, html_content: str, output_path: Path):
         """Convert HTML to Markdown."""

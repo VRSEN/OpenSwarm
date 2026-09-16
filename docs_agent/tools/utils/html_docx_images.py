@@ -16,6 +16,9 @@ from .html_docx_selectors import _compute_style_map
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".avif"}
 
+# Maximum bytes for a remote image fetch (10 MB). Header checked first, then chunked.
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
 # Fallback max image width when no cell/container constraint is available.
 # ~5.5 inches — fits safely within any standard A4/Letter body.
 _DEFAULT_MAX_IMAGE_WIDTH_PT = 400.0
@@ -162,13 +165,13 @@ def _svg_child_to_xml(node) -> str:
     return f"<{node.name} {attrs}/>" if attrs else f"<{node.name}/>"
 
 
-def _add_image_run(paragraph, node: Tag, parent_style: Dict[str, str]) -> None:
+def _add_image_run(paragraph, node: Tag, parent_style: Dict[str, str], base_dir: Optional[Path] = None) -> None:
     src = node.get("src", "") or ""
     if not src:
         return
 
     width_pt, height_pt = _extract_image_dimensions(node, parent_style)
-    image_stream = _load_image_stream(src)
+    image_stream = _load_image_stream(src, base_dir)
     if image_stream is None:
         alt_text = (node.get("alt", "") or "").strip()
         if alt_text:
@@ -227,7 +230,22 @@ def _extract_image_dimensions(
     return width_pt, height_pt
 
 
-def _load_image_stream(src: str) -> BytesIO | Path | None:
+def _load_local_image(path: Path) -> BytesIO | None:
+    """Read a local image file into a seekable stream.
+
+    python-docx's Image.from_file calls stream.seek(0) before sniffing the
+    format; on some versions a Path slips through the stream branch and fails
+    with AttributeError, which _add_picture_safe then swallows into placeholder
+    text. A BytesIO is accepted by every version.
+    """
+    try:
+        data = path.read_bytes()
+    except Exception:
+        return None
+    return BytesIO(data) if data else None
+
+
+def _load_image_stream(src: str, base_dir: Optional[Path] = None) -> BytesIO | Path | None:
     if src.startswith("data:image/"):
         return _load_data_image(src)
 
@@ -235,15 +253,88 @@ def _load_image_stream(src: str) -> BytesIO | Path | None:
         try:
             request = Request(src, headers={"User-Agent": "docs-agent"})
             with urlopen(request, timeout=20) as response:
-                return BytesIO(response.read())
+                # Header size check (Content-Length) before reading body
+                content_length = None
+                try:
+                    content_length = response.headers.get("Content-Length")  # type: ignore[attr-defined]
+                except Exception:
+                    try:
+                        content_length = response.getheader("Content-Length")  # type: ignore[attr-defined]
+                    except Exception:
+                        content_length = None
+                if content_length is not None:
+                    try:
+                        if int(str(content_length).strip()) > _MAX_IMAGE_BYTES:
+                            return None
+                    except (ValueError, TypeError):
+                        pass
+                # Chunked read with size cap
+                data = b""
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    data += chunk
+                    if len(data) > _MAX_IMAGE_BYTES:
+                        return None
+                return BytesIO(data)
         except Exception:
             return None
+
+    # Local file handling with base_dir confinement
+    if base_dir is not None:
+        try:
+            resolved_base = base_dir.resolve()
+        except Exception:
+            return None
+        p = Path(src)
+        # Absolute path: only allow if inside base_dir
+        if p.is_absolute():
+            try:
+                candidate = p.resolve()
+            except Exception:
+                return None
+            try:
+                if not candidate.is_relative_to(resolved_base):
+                    return None
+            except (ValueError, AttributeError):
+                # Fallback for Python <3.9 is_relative_to emulation
+                try:
+                    candidate.relative_to(resolved_base)
+                except ValueError:
+                    return None
+            if not candidate.exists():
+                return None
+            if candidate.suffix.lower() == ".svg":
+                try:
+                    return _convert_svg_to_png(candidate.read_bytes())
+                except Exception:
+                    return None
+            return _load_local_image(candidate)
+        # Relative path: resolve against base_dir and enforce traversal guard
+        candidate = (resolved_base / src).resolve()
+        try:
+            if not candidate.is_relative_to(resolved_base):
+                return None
+        except (ValueError, AttributeError):
+            try:
+                candidate.relative_to(resolved_base)
+            except ValueError:
+                return None
+        if not candidate.exists():
+            return None
+        if candidate.suffix.lower() == ".svg":
+            try:
+                return _convert_svg_to_png(candidate.read_bytes())
+            except Exception:
+                return None
+        return _load_local_image(candidate)
 
     path = Path(src)
     if path.exists():
         if path.suffix.lower() == ".svg":
             return _convert_svg_to_png(path.read_bytes())
-        return path
+        return _load_local_image(path)
     return None
 
 
