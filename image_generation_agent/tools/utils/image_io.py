@@ -30,7 +30,7 @@ SUPPORTED_ASPECT_RATIOS_BY_MODEL = {
     "gemini-3-pro-image-preview": set(ALL_ASPECT_RATIOS),
     # OpenAI image API size options are:
     # 1024x1024 (1:1), 1024x1536 (2:3), 1536x1024 (3:2)
-    "gpt-image-1.5": {"1:1", "2:3", "3:2"},
+    "gpt-image-2.5-sunburst": {"1:1", "2:3", "3:2"},
 }
 OPENAI_SIZE_BY_ASPECT_RATIO = {
     "1:1": "1024x1024",

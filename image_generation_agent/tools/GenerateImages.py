@@ -41,7 +41,7 @@ class GenerateImages(BaseTool):
             "If a path is provided, the image is saved at that path."
         ),
     )
-    model: Literal["gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gpt-image-1.5"] = Field(
+    model: Literal["gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gpt-image-2.5-sunburst"] = Field(
         default="gemini-2.5-flash-image",
         description="Image model to use.",
     )
@@ -145,7 +145,7 @@ class GenerateImages(BaseTool):
                 image_model_availability_message(
                     self,
                     failed_requirement=(
-                        "The current auth is Codex/browser auth. gpt-image-1.5 is not supported through the Codex API."
+                        "The current auth is Codex/browser auth. gpt-image-2.5-sunburst is not supported through the Codex API."
                     ),
                 )
             )
@@ -186,7 +186,7 @@ if __name__ == "__main__":
         #     "Create a logo for a skincare product that includes a leaf and a drop of water"
         # ),
         file_name="hero_image_example_oai_hero",
-        model="gpt-image-1.5",
+        model="gpt-image-2.5-sunburst",
         aspect_ratio="1:1",
         num_variants=1,
     )

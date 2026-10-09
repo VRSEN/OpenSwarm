@@ -47,7 +47,7 @@ class CombineImages(BaseTool):
             "If a path is provided, the image is saved at that path."
         ),
     )
-    model: Literal["gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gpt-image-1.5"] = Field(
+    model: Literal["gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gpt-image-2.5-sunburst"] = Field(
         default="gemini-2.5-flash-image",
         description="Image model to use for composition.",
     )
@@ -171,7 +171,7 @@ class CombineImages(BaseTool):
                     image_model_availability_message(
                         self,
                         failed_requirement=(
-                            "The current auth is Codex/browser auth. gpt-image-1.5 composition is not supported through the Codex API."
+                            "The current auth is Codex/browser auth. gpt-image-2.5-sunburst composition is not supported through the Codex API."
                         ),
                     )
                 )
@@ -213,7 +213,7 @@ if __name__ == "__main__":
             "Apply logo on a product. Keep the original product image as is."
         ),
         output_file_name="combined_example",
-        model="gpt-image-1.5",
+        model="gpt-image-2.5-sunburst",
         aspect_ratio="1:1",
         num_variants=1,
     )
