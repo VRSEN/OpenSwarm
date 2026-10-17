@@ -144,6 +144,10 @@ docker-compose up --build
 python server.py           # Runs on localhost:8080
 ```
 
+**Optional research tools:**
+
+- [Add Parallel Search MCP to the Deep Research Agent](docs/parallel-search.md) for free web search and page fetching without a Parallel API key.
+
 ---
 
 ## 📺 Learn More
