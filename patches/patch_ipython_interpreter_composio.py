@@ -13,7 +13,7 @@ if r"{root_dir}" not in sys.path:
     sys.path.insert(0, r"{root_dir}")
 
 import helpers as _helpers
-from helpers import get_composio_client, get_composio_user_id
+from helpers import execute_composio_tool, get_composio_client, get_composio_user_id
 
 composio = get_composio_client()
 user_id = get_composio_user_id()

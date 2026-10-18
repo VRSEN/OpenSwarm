@@ -40,6 +40,8 @@ def embed_local_images(html: str, base_dir: Path) -> str:
     unreachable resources are left unchanged (no crash).
     """
 
+    resolved_base_dir = base_dir.resolve()
+
     def _encode(src: str) -> str | None:
         if src.startswith("data:") or src.startswith("file://"):
             return None
@@ -58,8 +60,8 @@ def embed_local_images(html: str, base_dir: Path) -> str:
         if not _is_image_path(src):
             return None
 
-        img_path = (base_dir / src).resolve()
-        if not img_path.exists():
+        img_path = (resolved_base_dir / src).resolve()
+        if not img_path.is_relative_to(resolved_base_dir) or not img_path.exists():
             return None
         mime, _ = mimetypes.guess_type(str(img_path))
         mime = mime or "image/png"

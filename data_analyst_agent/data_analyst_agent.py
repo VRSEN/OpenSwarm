@@ -14,6 +14,7 @@ from config import get_default_model, is_openai_provider
 current_dir = os.path.dirname(os.path.abspath(__file__))
 instructions_path = os.path.join(current_dir, "instructions.md")
 
+
 def create_data_analyst() -> Agent:
     return Agent(
         name="Data Analyst",

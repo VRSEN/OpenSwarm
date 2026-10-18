@@ -60,12 +60,10 @@ import matplotlib.pyplot as plt
 import os
 
 # Fetch data from external system
-# Composio and user_id are imported at runtime and do not require separate imports
-result = composio.tools.execute(
+# execute_composio_tool is imported at runtime and does not require a separate import
+result = execute_composio_tool(
     "TOOL_NAME_HERE",
-    user_id=user_id,
-    arguments={"param1": "value1"},
-    dangerously_skip_version_check=True
+    {"param1": "value1"},
 )
 
 # Transform to DataFrame

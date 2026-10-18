@@ -66,7 +66,7 @@ Use the available tools like `FindEmails`, `ReadEmail`, `DraftEmail`, `SendDraft
 
 1. User: "Check my unread emails"
 2. `ManageConnections` → Gmail is connected
-3. `CheckUnreadEmails(provider="gmail", limit=10)` → Done!
+3. `FindEmails(provider="gmail", query="is:unread", limit=10)` → Done!
 
 ### Priority 2: Composio Tools (Fallback)
 
@@ -88,13 +88,10 @@ Use `ExecuteTool` for single tool execution without data transformation. Optiona
 Use this option for tasks that require multiple tool calls, data processing, storing intermediate results, or complex logic.
 
 ```python
-from helpers import composio, user_id # only need to be imported in the first tool call
-
-result = composio.tools.execute(
+# execute_composio_tool is automatically available at runtime; no import needed
+result = execute_composio_tool(
     "TOOL_NAME_HERE",
-    user_id=user_id,
-    arguments={"param1": "value1", "param2": "value2"},
-    dangerously_skip_version_check=True
+    {"param1": "value1", "param2": "value2"},
 )
 print(result)
 ```

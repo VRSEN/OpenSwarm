@@ -1,9 +1,9 @@
-agency-swarm[fastapi,jupyter,litellm]>=1.9.7
+agency-swarm[fastapi,jupyter,litellm]==1.10.5
 questionary>=2.0.0
 fastapi
 uvicorn
-composio==0.8.0
-composio-openai-agents==0.8.0
+composio==0.15.0
+composio-openai-agents==0.15.0
 pytz
 # Data analysis and manipulation
 pandas>=2.0.0

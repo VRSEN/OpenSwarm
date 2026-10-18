@@ -12,8 +12,25 @@ const { pathToFileURL } = require('url')
 const root = path.dirname(__dirname)
 const launcher = path.join(root, 'bin', 'openswarm')
 const configPath = path.join(root, 'openswarm.config.mjs')
+const marketplacePath = path.join(root, 'openswarm.marketplace.json')
 const productEnvPath = path.join(root, 'openswarm.product-env.json')
 const envWriter = path.join(root, 'scripts', 'write-product-env.mjs')
+const marketplaceEnvKeys = [
+  'OPENSWARM_MARKETPLACE_SWARM_ID',
+  'OPENSWARM_MARKETPLACE_PARENT_SWARM_ID',
+  'OPENSWARM_MARKETPLACE_SWARM_ORIGIN',
+  'AGENTSWARM_MARKETPLACE_SWARM_ID',
+  'AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID',
+  'AGENTSWARM_MARKETPLACE_SWARM_ORIGIN',
+]
+
+function cleanEnv(extra = {}) {
+  const env = { ...process.env, ...extra }
+  for (const key of marketplaceEnvKeys) {
+    if (!(key in extra)) delete env[key]
+  }
+  return env
+}
 
 async function loadConfig() {
   return import(pathToFileURL(configPath).href)
@@ -158,6 +175,7 @@ function assertPlatformPackageOrdering() {
 
 async function assertStateRoot() {
   const config = await loadConfig()
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   assert.equal(
     config.resolveStateRoot({}, 'linux', '/home/tester'),
     path.join('/home/tester', '.openswarm'),
@@ -178,19 +196,89 @@ async function assertStateRoot() {
   const env = config.getProductEnv({
     env: {},
     stateRoot: path.join('/home/tester', '.openswarm'),
-    version: '1.2.3-test',
   })
   assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
   assert.equal(env.AGENTSWARM_PRODUCT_STATE_ROOT, path.join('/home/tester', '.openswarm'))
-  assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '1.2.3-test')
+  assert.equal(env.AGENTSWARM_PRODUCT_VERSION, pkg.version)
+  assert.equal(env.AGENTSWARM_PRODUCT_HIDE_CONNECT, 'true')
+  assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'VRSEN/OpenSwarm')
+  assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
+  assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
   assertProductAddons(env)
+
+  const ambientEnv = config.getProductEnv({
+    env: {
+      OPENSWARM_MARKETPLACE_SWARM_ID: 'someone/custom-swarm',
+      OPENSWARM_MARKETPLACE_PARENT_SWARM_ID: 'VRSEN/OpenSwarm',
+      OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'fork',
+      AGENTSWARM_MARKETPLACE_SWARM_ID: 'stale/swarm',
+      AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID: 'stale/parent',
+      AGENTSWARM_MARKETPLACE_SWARM_ORIGIN: 'unknown',
+    },
+    stateRoot: path.join('/home/tester', '.openswarm'),
+  })
+  assert.equal(ambientEnv.AGENTSWARM_MARKETPLACE_SWARM_ID, 'VRSEN/OpenSwarm')
+  assert.equal(ambientEnv.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
+  assert.equal(ambientEnv.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
+
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-project-marketplace-'))
+  try {
+    const fullOwner = 'a'.repeat(39)
+    const fullRepo = 'b'.repeat(100)
+    fs.writeFileSync(
+      path.join(project, 'openswarm.marketplace.json'),
+      `${JSON.stringify({
+        swarmId: `${fullOwner}/${fullRepo}`,
+        parentSwarmId: 'VRSEN/OpenSwarm',
+        swarmOrigin: 'fork',
+      })}\n`,
+      'utf8',
+    )
+    const fullEnv = config.getProductEnv({
+      cwd: project,
+      env: {
+        OPENSWARM_MARKETPLACE_SWARM_ID: 'ignored/runtime',
+        OPENSWARM_MARKETPLACE_PARENT_SWARM_ID: 'ignored/runtime-parent',
+        OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'original',
+      },
+      stateRoot: path.join('/home/tester', '.openswarm'),
+    })
+    assert.equal(fullEnv.AGENTSWARM_MARKETPLACE_SWARM_ID, `${fullOwner}/${fullRepo}`)
+    assert.equal(fullEnv.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(fullEnv.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'fork')
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true })
+  }
+
+  const parentProject = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-parent-marketplace-'))
+  try {
+    fs.writeFileSync(
+      path.join(parentProject, 'openswarm.marketplace.json'),
+      '{"swarmId":"owner/child-swarm","parentSwarmId":"owner/parent-swarm","swarmOrigin":"fork"}\n',
+      'utf8',
+    )
+    const forkEnv = config.getProductEnv({
+      cwd: parentProject,
+      env: {},
+      stateRoot: path.join('/home/tester', '.openswarm'),
+    })
+    assert.equal(forkEnv.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, 'owner/parent-swarm')
+  } finally {
+    fs.rmSync(parentProject, { recursive: true, force: true })
+  }
 }
 
 async function assertProductEnvJsonSync() {
   const config = await loadConfig()
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   const checkedIn = fs.readFileSync(productEnvPath, 'utf8')
   const generated = cp.spawnSync(process.execPath, [envWriter, '--json'], {
     cwd: root,
+    env: cleanEnv({
+      OPENSWARM_MARKETPLACE_SWARM_ID: 'someone/custom-swarm',
+      OPENSWARM_MARKETPLACE_PARENT_SWARM_ID: 'VRSEN/OpenSwarm',
+      OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'fork',
+    }),
     encoding: 'utf8',
   })
   assert.equal(generated.status, 0, `env JSON writer exited with ${generated.status}: ${generated.stderr}`)
@@ -200,14 +288,15 @@ async function assertProductEnvJsonSync() {
   const env = config.getProductEnv({
     env: {},
     stateRoot: '__OPENSWARM_STATE_ROOT__',
-    version: '__OPENSWARM_VERSION__',
   })
   delete env.AGENTSWARM_PRODUCT_STATE_ROOT
   delete env.AGENTSWARM_PRODUCT_VERSION
   assert.deepEqual(fallback, env, 'openswarm.product-env.json is out of sync with openswarm.config.mjs')
+  assert.equal(fallback.AGENTSWARM_PRODUCT_VERSION, undefined, 'openswarm.product-env.json must not store dynamic package version')
+  assert.equal(config.getProductEnv({ env: {}, stateRoot: '__OPENSWARM_STATE_ROOT__' }).AGENTSWARM_PRODUCT_VERSION, pkg.version)
 }
 
-function writeFakePackage(rootDir) {
+function writeFakePackage(rootDir, marketplace) {
   const pkg = path.join(rootDir, 'node_modules', '@vrsen', 'openswarm')
   const bin = path.join(pkg, 'bin')
   const dep = path.join(pkg, 'node_modules', '@vrsen', 'agentswarm', 'bin')
@@ -218,6 +307,11 @@ function writeFakePackage(rootDir) {
   fs.copyFileSync(launcher, path.join(bin, 'openswarm'))
   fs.chmodSync(path.join(bin, 'openswarm'), 0o755)
   fs.copyFileSync(configPath, path.join(pkg, 'openswarm.config.mjs'))
+  if (marketplace) {
+    fs.writeFileSync(path.join(pkg, 'openswarm.marketplace.json'), `${JSON.stringify(marketplace, null, 2)}\n`, 'utf8')
+  } else {
+    fs.copyFileSync(marketplacePath, path.join(pkg, 'openswarm.marketplace.json'))
+  }
   fs.writeFileSync(
     path.join(pkg, 'package.json'),
     JSON.stringify({ name: '@vrsen/openswarm', version: '7.8.9-smoke' }),
@@ -244,7 +338,7 @@ function writeFakePackage(rootDir) {
     [
       '#!/usr/bin/env node',
       "'use strict'",
-      "console.log('7.8.9-smoke')",
+      "console.log('platform-smoke')",
     ].join('\n'),
     'utf8',
   )
@@ -257,28 +351,183 @@ function assertLauncherDelegatesToDependency() {
   try {
     const bin = writeFakePackage(tmp)
     const envPath = path.join(tmp, 'env.json')
-    const result = cp.spawnSync(process.execPath, [bin, '--version'], {
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
       cwd: tmp,
-      env: {
-        ...process.env,
+      env: cleanEnv({
+        ENABLE_TELEMETRY: '0',
+        OPEN_SWARM_TELEMETRY: '1',
+        AGENTSWARM_TELEMETRY: 'true',
+        AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID: 'stale/parent',
         OPENSWARM_TUI_URL: 'https://127.0.0.1:9/should-not-be-read',
         OPENSWARM_LAUNCHER_SMOKE_ENV: envPath,
-      },
+      }),
       encoding: 'utf8',
     })
     assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
-    assert.equal(result.stdout.trim(), '7.8.9-smoke')
+    assert.equal(result.stdout.trim(), 'platform-smoke')
 
     const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
     assert.equal(env.AGENTSWARM_PRODUCT_DISPLAY_NAME, 'OpenSwarm')
     assert.equal(env.AGENTSWARM_PRODUCT_COMMAND, 'openswarm')
     assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '7.8.9-smoke')
+    assert.equal(env.AGENTSWARM_PRODUCT_HIDE_CONNECT, 'true')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
     assert.equal(env.AGENTSWARM_LAUNCHER, '1')
     assert.equal(env.PYTHONUTF8, '1')
     assert.equal(env.PYTHONIOENCODING, 'utf-8')
+    assert.equal(env.OPEN_SWARM_TELEMETRY, '0')
+    assert.equal(env.AGENTSWARM_TELEMETRY, '0')
     assert.ok(env.AGENTSWARM_BIN_PATH, 'AGENTSWARM_BIN_PATH was not set')
     assert.ok(env.AGENTSWARM_BIN_PATH.includes('openswarm-cli-'), 'AGENTSWARM_BIN_PATH did not use an OpenSwarm platform package')
     assertProductAddons(env)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertLauncherPassesForkMarketplaceMetadata() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-fork-marketplace-'))
+  try {
+    const bin = writeFakePackage(tmp, {
+      swarmId: 'someone/custom-swarm',
+      parentSwarmId: 'VRSEN/OpenSwarm',
+      swarmOrigin: 'fork',
+    })
+    const envPath = path.join(tmp, 'env.json')
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
+      cwd: tmp,
+      env: cleanEnv({ OPENSWARM_LAUNCHER_SMOKE_ENV: envPath }),
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'someone/custom-swarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'fork')
+    assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '7.8.9-smoke')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertLauncherPassesProjectMarketplaceMetadata() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-project-marketplace-'))
+  try {
+    const bin = writeFakePackage(tmp)
+    const project = path.join(tmp, 'project')
+    fs.mkdirSync(project)
+    fs.writeFileSync(
+      path.join(project, 'openswarm.marketplace.json'),
+      '{"swarmId":"someone/project-swarm","parentSwarmId":"VRSEN/OpenSwarm","swarmOrigin":"fork"}\n',
+      'utf8',
+    )
+    const envPath = path.join(tmp, 'env.json')
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
+      cwd: project,
+      env: cleanEnv({ OPENSWARM_LAUNCHER_SMOKE_ENV: envPath }),
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'someone/project-swarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'fork')
+    assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '7.8.9-smoke')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertLauncherIgnoresMarketplaceEnv() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-ignore-marketplace-env-'))
+  try {
+    const bin = writeFakePackage(tmp)
+    const envPath = path.join(tmp, 'env.json')
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
+      cwd: tmp,
+      env: cleanEnv({
+        OPENSWARM_LAUNCHER_SMOKE_ENV: envPath,
+        OPENSWARM_MARKETPLACE_SWARM_ID: 'someone/custom-swarm',
+        OPENSWARM_MARKETPLACE_PARENT_SWARM_ID: '',
+        OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'original',
+        AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID: 'stale/parent',
+      }),
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertLauncherIgnoresMalformedMarketplaceEnv() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-ignore-bad-marketplace-env-'))
+  try {
+    const bin = writeFakePackage(tmp)
+    const envPath = path.join(tmp, 'env.json')
+    const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
+      cwd: tmp,
+      env: cleanEnv({
+        OPENSWARM_LAUNCHER_SMOKE_ENV: envPath,
+        OPENSWARM_MARKETPLACE_SWARM_ID: 'someone/custom-swarm',
+        OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'fork',
+      }),
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    const env = JSON.parse(fs.readFileSync(envPath, 'utf8'))
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ID, 'VRSEN/OpenSwarm')
+    assert.equal(env.AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID, undefined)
+    assert.equal(env.AGENTSWARM_MARKETPLACE_SWARM_ORIGIN, 'original')
+    assert.equal(env.AGENTSWARM_PRODUCT_VERSION, '7.8.9-smoke')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertMalformedMarketplaceMetadataFails() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-bad-marketplace-'))
+  try {
+    for (const marketplace of [
+      { swarmId: '', swarmOrigin: 'fork' },
+      { swarmId: 'openswarm', swarmOrigin: 'fork' },
+      { swarmId: 'bad--owner/custom-swarm', swarmOrigin: 'original' },
+      { swarmId: 'someone/custom-swarm.GIT', swarmOrigin: 'original' },
+      { swarmId: `owner/${'a'.repeat(129)}`, swarmOrigin: 'original' },
+      { swarmId: 'someone/custom-swarm', swarmOrigin: 'fork' },
+      { swarmId: 'someone/custom-swarm', parentSwarmId: 'VRSEN/OpenSwarm', swarmOrigin: 'copy' },
+    ]) {
+      const bin = writeFakePackage(tmp, marketplace)
+      const result = cp.spawnSync(process.execPath, [bin, 'smoke'], {
+        cwd: tmp,
+        env: cleanEnv(),
+        encoding: 'utf8',
+      })
+      assert.notEqual(result.status, 0, `launcher succeeded with malformed marketplace metadata: ${JSON.stringify(marketplace)}`)
+      assert.ok(result.stderr.includes('OpenSwarm marketplace metadata'), result.stderr)
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function assertVersionRequestUsesOpenSwarmPackageVersion() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-launcher-version-'))
+  try {
+    const bin = writeFakePackage(tmp)
+    const result = cp.spawnSync(process.execPath, [bin, '--version'], {
+      cwd: tmp,
+      env: cleanEnv(),
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 0, `launcher exited with ${result.status}: ${result.stderr}`)
+    assert.equal(result.stdout.trim(), '7.8.9-smoke')
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -294,6 +543,7 @@ function assertMissingPlatformPackageFails() {
     }
     const result = cp.spawnSync(process.execPath, [bin, '--version'], {
       cwd: tmp,
+      env: cleanEnv(),
       encoding: 'utf8',
     })
     assert.notEqual(result.status, 0, 'launcher succeeded without an OpenSwarm platform package')
@@ -304,27 +554,21 @@ function assertMissingPlatformPackageFails() {
 }
 
 function assertWorkflowEnvWriter() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   const result = cp.spawnSync(process.execPath, [envWriter], {
     cwd: root,
-    env: {
-      ...process.env,
-      OPENSWARM_PRODUCT_VERSION: '4.5.6-workflow',
-    },
+    env: cleanEnv({
+      OPENSWARM_MARKETPLACE_SWARM_ID: 'someone/custom-swarm',
+      OPENSWARM_MARKETPLACE_PARENT_SWARM_ID: 'VRSEN/OpenSwarm',
+      OPENSWARM_MARKETPLACE_SWARM_ORIGIN: 'fork',
+    }),
     encoding: 'utf8',
   })
   assert.equal(result.status, 0, `env writer exited with ${result.status}: ${result.stderr}`)
   assert.ok(result.stdout.includes('AGENTSWARM_PRODUCT_DISPLAY_NAME<<__OPENSWARM_ENV__'))
   assert.ok(result.stdout.includes('OpenSwarm'))
   assert.ok(result.stdout.includes('AGENTSWARM_PRODUCT_VERSION<<__OPENSWARM_ENV__'))
-  assert.ok(result.stdout.includes('4.5.6-workflow'))
-
-  const missing = cp.spawnSync(process.execPath, [envWriter], {
-    cwd: root,
-    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'OPENSWARM_PRODUCT_VERSION' && key !== 'npm_package_version')),
-    encoding: 'utf8',
-  })
-  assert.notEqual(missing.status, 0, 'env writer succeeded without a product version')
-  assert.ok(missing.stderr.includes('OPENSWARM_PRODUCT_VERSION or npm_package_version is required'), missing.stderr)
+  assert.ok(result.stdout.includes(pkg.version))
 }
 
 async function main() {
@@ -334,6 +578,12 @@ async function main() {
   await assertStateRoot()
   await assertProductEnvJsonSync()
   assertLauncherDelegatesToDependency()
+  assertLauncherPassesForkMarketplaceMetadata()
+  assertLauncherPassesProjectMarketplaceMetadata()
+  assertLauncherIgnoresMarketplaceEnv()
+  assertLauncherIgnoresMalformedMarketplaceEnv()
+  assertMalformedMarketplaceMetadataFails()
+  assertVersionRequestUsesOpenSwarmPackageVersion()
   assertMissingPlatformPackageFails()
   assertWorkflowEnvWriter()
   console.log('openswarm launcher smoke passed')

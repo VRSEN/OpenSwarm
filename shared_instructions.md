@@ -31,17 +31,17 @@ Agents (except for Agent Swarm agent) can extend their functionality by adding c
 
 ### 5.2 Tool discovery sequence
 
-1. `ManageConnections` to check authentication/connected systems.
-2. `SearchTools` to discover candidate tools from intent.
+1. `ManageConnections` to check authentication/connected systems. Save the returned `session_id`.
+2. `SearchTools` to discover candidate tools from intent, passing that `session_id`.
 3. `FindTools` with `include_args=True` to inspect exact parameters.
-4.1. `ExecuteTool` for simple single-tool execution.
+4.1. `ExecuteTool` for simple single-tool execution; pass the same `session_id` for any tool discovered or authorized through Composio.
 4.2. `ProgrammaticToolCalling` only for complex multi-step edge cases.
 
 ### 5.3 Advanced queries
 
 - For standard tasks, prefer shared tools (`ManageConnections`, `SearchTools`, `FindTools`, `ExecuteTool`).
-- If `ProgrammaticToolCalling` is unavoidable, direct calls to `composio.tools.execute(...)` and `composio.tools.get(...)` are allowed.
-- n `ProgrammaticToolCalling`, `composio` (the injected Composio client object for `tools.get`/`tools.execute`) and `user_id` are automatically available at runtime.
+- If `ProgrammaticToolCalling` is unavoidable, use `execute_composio_tool(...)` for execution and `composio.tools.get(...)` for discovery.
+- In `ProgrammaticToolCalling`, `execute_composio_tool`, `composio` (the injected Composio client object for `tools.get`), and `user_id` are automatically available at runtime.
 Do not import them manually unless explicitly needed for compatibility.
 
 ```python
@@ -51,15 +51,13 @@ tools = composio.tools.get(
     limit=5,
 )
 
-result = composio.tools.execute(
-    tool_name="GMAIL_SEND_EMAIL",
-    user_id=user_id,
-    arguments={
+result = execute_composio_tool(
+    "GMAIL_SEND_EMAIL",
+    {
         "to": ["user@example.com"],
         "subject": "Hello",
         "body": "Hi from agent",
     },
-    dangerously_skip_version_check=True,
 )
 print(result)
 ```

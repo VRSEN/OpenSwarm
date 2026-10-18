@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import mimetypes
-import os
 import re
 import tempfile
 import threading
@@ -17,13 +16,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agency_swarm import Agent, ModelSettings, Reasoning
+from agency_swarm import Agent
 from agency_swarm.tools import BaseTool, ToolOutputText, tool_output_image_from_path
-from agents.extensions.models.litellm_model import LitellmModel
-from openai import AsyncOpenAI
 from pydantic import Field
 from run_utils import _load_openswarm_dotenv
 
+from .internal_model import (
+    get_internal_agent_response,
+    make_internal_model,
+    make_internal_model_settings,
+)
 from .slide_file_utils import get_project_dir
 from .slide_html_utils import (
     ensure_full_html,
@@ -32,6 +34,7 @@ from .slide_html_utils import (
     _strip_html_to_text,
 )
 from .template_registry import load_template_index, save_template_index, template_path
+
 # Per-project locks for the template-index read-modify-write.
 _index_locks: dict[str, threading.Lock] = {}
 _index_locks_guard = threading.Lock()
@@ -219,119 +222,48 @@ def _embed_local_images_as_base64(html: str, project_dir: Path) -> str:
     return html
 
 
-_HTML_WRITER_MODEL_CLAUDE = "anthropic/claude-sonnet-4-6"
-_HTML_WRITER_MODEL_OAI = "gpt-5.3-codex"
 _HTML_WRITER_MAX_ATTEMPTS = 3
 
 
-def _get_caller_openai_client(tool) -> "AsyncOpenAI | None":
-    ctx = getattr(tool, "_context", None)
-    master = getattr(ctx, "context", None)
-    agent_name = getattr(master, "current_agent_name", None)
-    agents = getattr(master, "agents", {})
-    agent = agents.get(agent_name) if agent_name else None
-    model = getattr(agent, "model", None)
-    for attr in ("_client", "openai_client", "client"):
-        maybe = getattr(model, attr, None)
-        if isinstance(maybe, AsyncOpenAI):
-            return maybe
-    return None
-
-
-class _CodexResponsesModel:
-    """Subclass of OpenAIResponsesModel that strips parameters unsupported by the Codex endpoint."""
-
-    _cls = None
-
-    @classmethod
-    def _get_cls(cls):
-        if cls._cls is None:
-            from agents import OpenAIResponsesModel
-            from dataclasses import replace
-
-            class _Impl(OpenAIResponsesModel):
-                async def _fetch_response(self, system_instructions, input, model_settings, *args, **kwargs):
-                    model_settings = replace(model_settings, truncation=None)
-                    return await super()._fetch_response(system_instructions, input, model_settings, *args, **kwargs)
-
-            cls._cls = _Impl
-        return cls._cls
-
-    def __new__(cls, model: str, openai_client):
-        return cls._get_cls()(model=model, openai_client=openai_client)
-
-
-async def _agent_get_response(agent: Agent, prompt: str, *, use_stream: bool = False):
-    """Call agent.get_response or stream-based equivalent.
-
-    Codex endpoint requires stream=True; use get_response_stream() in that case.
-    """
-    if use_stream:
-        stream = agent.get_response_stream(prompt)
-        text_deltas: list[str] = []
-        async for event in stream:
-            data = getattr(event, "data", None)
-            if data is not None:
-                delta = getattr(data, "delta", None)
-                if delta and isinstance(delta, str):
-                    text_deltas.append(delta)
-        result = await stream.wait_final_result()
-        fo = getattr(result, "final_output", None) if result is not None else None
-        if not fo and text_deltas:
-            assembled = "".join(text_deltas)
-            try:
-                if result is not None:
-                    result.final_output = assembled
-                else:
-                    class _R:
-                        final_output = assembled
-                    result = _R()
-            except Exception:
-                pass
-        return result
-    return await agent.get_response(prompt)
+def _register_sub_agent_usage(tool, agent_model, result) -> None:
+    """Push sub-agent raw API responses into the master context for UI cost tracking."""
+    try:
+        from agency_swarm.utils.model_utils import get_usage_tracking_model_name
+        raw_responses = getattr(result, "raw_responses", None) or []
+        if not raw_responses:
+            return
+        ctx = getattr(tool, "_context", None)
+        master = getattr(ctx, "context", None)
+        registry = getattr(master, "_sub_agent_raw_responses", None)
+        if registry is None:
+            return
+        model_name = get_usage_tracking_model_name(agent_model)
+        for resp in raw_responses:
+            registry.append((model_name, resp))
+    except Exception:
+        pass
 
 
 def _make_html_writer_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one ModifySlide call.
 
     Model priority:
-    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best HTML quality)
-    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
-    3. AsyncOpenAI() default (env vars)
+    1. Request-level RunConfig model
+    2. Calling agent's selected model and transport
+    3. DEFAULT_MODEL from the OpenSwarm environment
 
     Returns (agent, is_codex).
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    is_codex = False
-    if anthropic_key:
-        model = LitellmModel(model=_HTML_WRITER_MODEL_CLAUDE, api_key=anthropic_key)
-    else:
-        from agents import OpenAIResponsesModel
-        from openai import AsyncOpenAI
-        caller_client = tool and _get_caller_openai_client(tool)
-        client = AsyncOpenAI(
-            api_key=caller_client.api_key,
-            base_url=str(caller_client.base_url),
-        ) if caller_client else AsyncOpenAI()
-        is_codex = bool(caller_client and not str(caller_client.base_url).startswith("https://api.openai.com"))
-        if is_codex:
-            model = _CodexResponsesModel(model=_HTML_WRITER_MODEL_OAI, openai_client=client)
-        else:
-            model = OpenAIResponsesModel(model=_HTML_WRITER_MODEL_OAI, openai_client=client)
+    route = make_internal_model(tool)
     agent = Agent(
         name="Slide HTML Writer",
         description="Generates complete slide HTML from task briefs.",
         instructions=_read_html_writer_instructions(),
         tools=[],
-        model=model,
-        model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity="medium",
-            store=False if is_codex else None,
-        ),
+        model=route.model,
+        model_settings=make_internal_model_settings(route),
     )
-    return agent, is_codex
+    return agent, route.is_codex
 
 
 def _extract_html_from_output(text: str) -> str:
@@ -566,86 +498,147 @@ class ModifySlide(BaseTool):
 
         writer, is_codex = _make_html_writer_agent(tool=self)
 
+        # Compute rel_path for the preview server.
+        _preview_rel_path: str | None = None
+        try:
+            from .slide_file_utils import get_mnt_dir
+            _preview_rel_path = str(slide_path.relative_to(get_mnt_dir())).replace("\\", "/")
+        except Exception:
+            pass
+
+        # Start preview server + open browser directly on the project page.
+        if _preview_rel_path:
+            try:
+                import urllib.parse
+                import traceback as _tb
+                import slides_preview_server as _p
+                def _log(msg: str) -> None:
+                    try:
+                        (Path(__file__).parents[2] / "preview_debug.log").open("a").write(msg + "\n")
+                    except Exception:
+                        pass
+                _log("_ensure_server starting")
+                await asyncio.to_thread(_p._ensure_server)
+                _log(f"_server_url={_p._server_url}")
+                if _p._server_url:
+                    _project_url = f"{_p._server_url}/project/{urllib.parse.quote(self.project_name, safe='')}"
+                    _log(f"opening browser: {_project_url}")
+                    await asyncio.to_thread(_p.open_browser_once, _project_url)
+                    _log("open_browser_once done")
+            except Exception as _exc:
+                try:
+                    (Path(__file__).parents[2] / "preview_debug.log").open("a").write(f"ERROR: {_exc}\n{_tb.format_exc()}\n")
+                except Exception:
+                    pass
+
+        def _on_delta(delta: str) -> None:
+            if not _preview_rel_path:
+                return
+            try:
+                import slides_preview_server as _p
+                _p.push_slide_delta(rel_path=_preview_rel_path, name=slide_filename, delta=delta)
+            except Exception:
+                pass
+
+        def _preview_done() -> None:
+            if not _preview_rel_path:
+                return
+            try:
+                import slides_preview_server as _p
+                _p.push_slide_complete(rel_path=_preview_rel_path, name=slide_filename)
+            except Exception:
+                pass
+
         sub_results: list[Any] = []
         last_validation_error = ""
         previous_failed_html: str | None = None
         final_html = ""
         used_scaffold = False
 
-        for attempt in range(1, _HTML_WRITER_MAX_ATTEMPTS + 1):
-            prompt = _build_sub_run_prompt(
-                task_brief=self.task_brief,
-                slide_name=slide_filename,
-                total_pages=total_pages,
-                main_text_contents=main_text_contents,
-                base_html=base_html,
-                current_html=current_html if using_template else None,
-                theme_css=theme_css,
-                retry_validation_error=last_validation_error,
-                previous_failed_html=previous_failed_html,
-            )
+        try:
+            for attempt in range(1, _HTML_WRITER_MAX_ATTEMPTS + 1):
+                prompt = _build_sub_run_prompt(
+                    task_brief=self.task_brief,
+                    slide_name=slide_filename,
+                    total_pages=total_pages,
+                    main_text_contents=main_text_contents,
+                    base_html=base_html,
+                    current_html=current_html if using_template else None,
+                    theme_css=theme_css,
+                    retry_validation_error=last_validation_error,
+                    previous_failed_html=previous_failed_html,
+                )
 
-            try:
-                final_result = await _agent_get_response(writer, prompt, use_stream=is_codex)
-            except Exception as exc:
-                import traceback
-                last_validation_error = f"Sub-agent error (attempt {attempt}): {exc}\n{traceback.format_exc()}"
-                continue
-            sub_results.append(final_result)
+                try:
+                    final_result = await get_internal_agent_response(
+                        writer,
+                        prompt,
+                        use_stream=is_codex,
+                        on_delta=_on_delta if attempt == 1 else None,
+                    )
+                except Exception as exc:
+                    import traceback
+                    last_validation_error = f"Sub-agent error (attempt {attempt}): {exc}\n{traceback.format_exc()}"
+                    continue
+                sub_results.append(final_result)
+                _register_sub_agent_usage(self, writer.model, final_result)
 
-            # No result object means the framework swallowed an API-level error
-            # (e.g. rate limit).  Extract whatever error detail is available.
-            if final_result is None:
-                last_validation_error = f"Sub-agent returned no result on attempt {attempt} (possible rate limit or API error)."
-                continue
-            api_error = getattr(final_result, "error", None) or getattr(final_result, "last_error", None)
-            if api_error:
-                last_validation_error = f"Sub-agent API error (attempt {attempt}): {api_error}"
-                continue
+                # No result object means the framework swallowed an API-level error
+                # (e.g. rate limit).  Extract whatever error detail is available.
+                if final_result is None:
+                    last_validation_error = f"Sub-agent returned no result on attempt {attempt} (possible rate limit or API error)."
+                    continue
+                api_error = getattr(final_result, "error", None) or getattr(final_result, "last_error", None)
+                if api_error:
+                    last_validation_error = f"Sub-agent API error (attempt {attempt}): {api_error}"
+                    continue
 
-            output_text = str(getattr(final_result, "final_output", "") or "")
-            candidate_html = _extract_html_from_output(output_text)
-            if not candidate_html:
-                last_validation_error = f"Model returned empty output on attempt {attempt}."
-                continue
+                output_text = str(getattr(final_result, "final_output", "") or "")
+                candidate_html = _extract_html_from_output(output_text)
+                if not candidate_html:
+                    last_validation_error = f"Model returned empty output on attempt {attempt}."
+                    continue
 
-            full_html, used_scaffold = ensure_full_html(candidate_html)
-            validation = await asyncio.to_thread(validate_html, full_html, project_dir, used_scaffold)
-            if validation.get("valid"):
-                final_html = full_html
-                break
-            last_validation_error = str(validation.get("error", "Unknown validation error")).strip()
-            previous_failed_html = full_html
+                full_html, used_scaffold = ensure_full_html(candidate_html)
+                validation = await asyncio.to_thread(validate_html, full_html, project_dir, used_scaffold)
+                if validation.get("valid"):
+                    final_html = full_html
+                    break
+                last_validation_error = str(validation.get("error", "Unknown validation error")).strip()
+                previous_failed_html = full_html
 
-        if not final_html:
-            return f"HTML validation failed after {_HTML_WRITER_MAX_ATTEMPTS} attempts:\n{last_validation_error}"
+            if not final_html:
+                return f"HTML validation failed after {_HTML_WRITER_MAX_ATTEMPTS} attempts:\n{last_validation_error}"
 
-        final_html = _convert_css_bg_images_to_img_tags(final_html)
-        final_html = _embed_local_images_as_base64(final_html, project_dir)
-        slide_path.write_text(final_html, encoding="utf-8")
-        save_note = ""
-        if self.save_as_template_key:
-            key = self.save_as_template_key.strip()
-            t_path = template_path(project_dir, key)
-            t_path.write_text(final_html, encoding="utf-8")
-            with _index_lock_for(project_dir):
-                fresh_index = load_template_index(project_dir)
-                fresh_index[key] = {
-                    "name": (self.save_as_template_name or key).strip(),
-                    "source_slide": slide_filename,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                save_template_index(project_dir, fresh_index)
-            save_note = f"\nSaved template: {key}."
+            final_html = _convert_css_bg_images_to_img_tags(final_html)
+            final_html = _embed_local_images_as_base64(final_html, project_dir)
+            slide_path.write_text(final_html, encoding="utf-8")
 
-        success_msg = f"Updated {slide_filename}.{save_note}"
+            save_note = ""
+            if self.save_as_template_key:
+                key = self.save_as_template_key.strip()
+                t_path = template_path(project_dir, key)
+                t_path.write_text(final_html, encoding="utf-8")
+                with _index_lock_for(project_dir):
+                    fresh_index = load_template_index(project_dir)
+                    fresh_index[key] = {
+                        "name": (self.save_as_template_name or key).strip(),
+                        "source_slide": slide_filename,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    save_template_index(project_dir, fresh_index)
+                save_note = f"\nSaved template: {key}."
 
-        screenshot, screenshot_err = await asyncio.to_thread(_screenshot_html_slide, slide_path)
-        if screenshot is not None:
-            return [ToolOutputText(text=success_msg), screenshot]
-        if screenshot_err:
-            return f"{success_msg}\n Screenshot failed: {screenshot_err}"
-        return success_msg
+            success_msg = f"Updated {slide_filename}.{save_note}"
+
+            screenshot, screenshot_err = await asyncio.to_thread(_screenshot_html_slide, slide_path)
+            if screenshot is not None:
+                return [ToolOutputText(text=success_msg), screenshot]
+            if screenshot_err:
+                return f"{success_msg}\n Screenshot failed: {screenshot_err}"
+            return success_msg
+        finally:
+            _preview_done()
 
 if __name__ == "__main__":
     modify_slide = ModifySlide(project_name="universe_5slide_deck", slide_name="slide_06", task_brief="""Generate a plain string saying hello world""")

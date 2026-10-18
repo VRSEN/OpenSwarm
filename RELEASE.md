@@ -10,8 +10,16 @@ OpenSwarm releases use one normal path: `Build TUI Binaries` builds the required
 - GitHub release assets:
   - `agentswarm-darwin-arm64`
   - `agentswarm-darwin-x64`
+  - `agentswarm-darwin-x64-baseline`
+  - `agentswarm-linux-arm64`
+  - `agentswarm-linux-arm64-musl`
   - `agentswarm-linux-x64`
+  - `agentswarm-linux-x64-baseline`
+  - `agentswarm-linux-x64-baseline-musl`
+  - `agentswarm-linux-x64-musl`
+  - `agentswarm-windows-arm64.exe`
   - `agentswarm-windows-x64.exe`
+  - `agentswarm-windows-x64-baseline.exe`
 
 ## Release Steps
 
