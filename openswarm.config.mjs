@@ -127,6 +127,7 @@ export const productAddons = [
   { id: "anthropic", title: "Anthropic Claude", keys: ["ANTHROPIC_API_KEY"], excludeProviders: ["anthropic"] },
   { id: "composio", title: "Composio", keys: ["COMPOSIO_API_KEY", "COMPOSIO_USER_ID"] },
   { id: "google", title: "Google Gemini", keys: ["GOOGLE_API_KEY"], excludeProviders: ["google"] },
+  { id: "minimax", title: "MiniMax", keys: ["MINIMAX_API_KEY"], excludeProviders: ["minimax"] },
   { id: "fal", title: "Fal.ai", keys: ["FAL_KEY"] },
   { id: "pexels", title: "Pexels", keys: ["PEXELS_API_KEY"] },
   { id: "pixabay", title: "Pixabay", keys: ["PIXABAY_API_KEY"] },

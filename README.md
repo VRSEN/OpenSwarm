@@ -100,6 +100,7 @@ The setup wizard walks you through everything, but you'll need at least one of t
 
 - `OPENAI_API_KEY` - For GPT 5.5 and Sora video generation
 - `ANTHROPIC_API_KEY` - For Claude models
+- `MINIMAX_API_KEY` - For MiniMax models (MiniMax-M3.1-Flash recommended, MiniMax-M3 alternative); set `DEFAULT_MODEL=minimax/MiniMax-M3.1-Flash` and `MINIMAX_REGION` to `global` or `cn`. For the Anthropic-compatible route, use `DEFAULT_MODEL=anthropic/MiniMax-M3.1-Flash`. Existing saved model IDs and custom endpoints remain supported.
 
 **Optional superpowers:**
 
