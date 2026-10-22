@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Architect Blueprint — Get Started</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="onboarding">
+  <main class="container narrow center">
+    <header>
+      <h1>Architect Blueprint</h1>
+      <p class="muted">Wealth machine for freelancers, solopreneurs, and business owners — variable income, real tax math, systems over motivation.</p>
+    </header>
+
+    <section class="card guide-card">
+      <h2>How this works</h2>
+      <ol class="guide-steps">
+        <li><strong>Your numbers</strong> — business revenue, owner pay, tax reserve, debts, credit (you enter them).</li>
+        <li><strong>Your plan</strong> — Profit First + personal 15/65/20, debt snowball, Stability Fund gap.</li>
+        <li><strong>Your advisor</strong> — AI specialists for SE tax, cash flow, and operator strategy (not generic employee advice).</li>
+      </ol>
+      <p class="small muted disclaimer">
+        Educational guidance only — not a licensed CPA, attorney, or credit repair firm.
+        You remain responsible for financial and tax decisions.
+      </p>
+    </section>
+
+    <p id="resume-msg" class="muted small hidden"></p>
+    <div class="btn-row" style="justify-content: center;">
+      <a href="/static/onboarding.html" class="btn" id="start-btn">Start Financial Reality Intake</a>
+    </div>
+    <p class="small muted" style="margin-top: 1rem;">
+      Already finished? <a href="/static/index.html">Go to Command Center</a>
+    </p>
+  </main>
+  <script type="module">
+    import { fetchJson } from "./js/app.js";
+    try {
+      const status = await fetchJson("/user/intake/status");
+      if (status.intake_completed) {
+        window.location.href = "/static/index.html";
+      } else if (status.intake_step > 0) {
+        document.getElementById("resume-msg").textContent =
+          `You left off at step ${status.intake_step} of 7 — pick up where you stopped.`;
+        document.getElementById("resume-msg").classList.remove("hidden");
+        document.getElementById("start-btn").textContent = "Resume Intake";
+      }
+    } catch {
+      /* first visit */
+    }
+  </script>
+</body>
+</html>

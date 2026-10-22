@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Financial Reality Intake</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="onboarding">
+  <main class="container">
+    <header class="center">
+      <h1>Financial Reality Intake</h1>
+      <p class="muted">Capture everything — income, expenses, bills, debts, and credit. About 15 minutes.</p>
+      <p id="step-label" class="step-label"></p>
+    </header>
+    <p id="error" class="error"></p>
+    <p id="preview-box" class="card inner hidden"></p>
+
+    <!-- Step 1: You / ESBI -->
+    <section id="step-1" class="step card">
+      <h2>Step 1 — You</h2>
+      <form id="form-1">
+        <label>Your name <input name="display_name" required placeholder="Alex" /></label>
+        <label>Trade / skill <input name="primary_trade" placeholder="Web design, HVAC, consulting…" /></label>
+        <label>Work type
+          <select name="employment_type" id="employment-type">
+            <option value="self_employed">Self-employed / freelancer</option>
+            <option value="business_owner">Business owner</option>
+            <option value="side_hustle">Side hustle + W-2</option>
+          </select>
+        </label>
+        <label>Primary income quadrant (ESBI)
+          <select name="cashflow_quadrant_primary" id="cashflow-quadrant">
+            <option value="E">E — Employee (paycheck)</option>
+            <option value="S" selected>S — Self-employed (you are the business)</option>
+            <option value="B">B — Business owner (system runs without you daily)</option>
+            <option value="I">I — Investor (assets pay you)</option>
+          </select>
+        </label>
+        <p class="muted small">Inspired by Rich Dad Cashflow Quadrant — not affiliated with Rich Dad Company.</p>
+        <details class="income-mix-details">
+          <summary class="small">Optional: income mix by quadrant (%)</summary>
+          <div class="income-mix-grid">
+            <label>E % <input name="income_mix_e_pct" type="number" min="0" max="100" value="0" /></label>
+            <label>S % <input name="income_mix_s_pct" type="number" min="0" max="100" value="100" /></label>
+            <label>B % <input name="income_mix_b_pct" type="number" min="0" max="100" value="0" /></label>
+            <label>I % <input name="income_mix_i_pct" type="number" min="0" max="100" value="0" /></label>
+          </div>
+          <p class="muted small">Rough estimate is fine — should sum to ~100%.</p>
+        </details>
+      </form>
+    </section>
+
+    <!-- Step 2: Income streams -->
+    <section id="step-2" class="step card hidden">
+      <h2>Step 2 — Income streams</h2>
+      <p class="muted small">Add every source of money coming in each month — W-2, business deposits, passive, gigs.</p>
+      <p class="intake-total">Total monthly income: <strong id="income-total">$0</strong></p>
+      <div id="income-list" class="line-item-list"></div>
+      <div class="inline-form card inner">
+        <h3 class="form-sub">Add income source</h3>
+        <div class="inline-form-grid">
+          <label>Name <input id="income-name" placeholder="Client retainers, W-2 job…" /></label>
+          <label>Type
+            <select id="income-type">
+              <option value="business">Business / self-employed</option>
+              <option value="w2">W-2 paycheck</option>
+              <option value="contract">Contract / 1099</option>
+              <option value="passive">Passive (rent, dividends)</option>
+              <option value="gig">Gig / side hustle</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Amount / month ($) <input id="income-amount" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Notes <input id="income-notes" placeholder="Optional" /></label>
+        </div>
+        <button type="button" id="add-income" class="btn btn-secondary btn-sm">+ Add income</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Expense categories -->
+    <section id="step-3" class="step card hidden">
+      <h2>Step 3 — Monthly expenses</h2>
+      <p class="muted small">Enter what you spend each month by category. Bills you add in Step 4 are counted on top.</p>
+      <p class="intake-total">Estimated essentials: <strong id="expense-total">$0</strong></p>
+      <div class="expense-grid">
+        <label>Housing (rent / mortgage) <input name="exp_housing" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Utilities & phone <input name="exp_utilities" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Food & groceries <input name="exp_food_groceries" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Transportation & gas <input name="exp_transportation" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Insurance (non-health) <input name="exp_insurance" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Healthcare & meds <input name="exp_healthcare" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Childcare & dependents <input name="exp_childcare" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Personal / household <input name="exp_personal" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Business costs (personal account) <input name="exp_business_opex" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Debt minimum payments <input name="exp_debt_minimums" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Other essentials <input name="exp_other" type="number" min="0" step="0.01" value="0" /></label>
+      </div>
+    </section>
+
+    <!-- Step 4: Bills + Stability Fund -->
+    <section id="step-4" class="step card hidden">
+      <h2>Step 4 — Recurring bills & Stability Fund</h2>
+      <p class="muted small">Subscriptions, utilities on autopay, loan payments — anything with a due date.</p>
+      <div id="bill-list" class="line-item-list"></div>
+      <div class="inline-form card inner">
+        <h3 class="form-sub">Add bill</h3>
+        <div class="inline-form-grid">
+          <label>Bill name <input id="bill-name" placeholder="Netflix, car insurance…" /></label>
+          <label>Amount / month ($) <input id="bill-amount" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Due day (1–31) <input id="bill-due" type="number" min="0" max="31" value="0" /></label>
+          <label>Category
+            <select id="bill-category">
+              <option value="subscription">Subscription</option>
+              <option value="utility">Utility</option>
+              <option value="insurance">Insurance</option>
+              <option value="loan">Loan payment</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label class="checkbox"><input type="checkbox" id="bill-autopay" /> Autopay enabled</label>
+        </div>
+        <button type="button" id="add-bill" class="btn btn-secondary btn-sm">+ Add bill</button>
+      </div>
+      <form id="form-4-stability" class="stability-block">
+        <h3 class="form-sub">Stability Fund</h3>
+        <label>Current balance ($) <input name="stability_fund_balance" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Target months of essentials saved
+          <select name="stability_fund_target_months">
+            <option value="3">3 months</option>
+            <option value="4" selected>4 months</option>
+            <option value="5">5 months</option>
+            <option value="6">6 months</option>
+          </select>
+        </label>
+      </form>
+    </section>
+
+    <!-- Step 5: Debts -->
+    <section id="step-5" class="step card hidden">
+      <h2>Step 5 — Debts</h2>
+      <p class="muted small">Every balance you owe — cards, loans, medical, collections-linked debts.</p>
+      <div id="debt-list" class="line-item-list"></div>
+      <div class="inline-form card inner">
+        <h3 class="form-sub">Add debt</h3>
+        <div class="inline-form-grid">
+          <label>Name <input id="debt-name" placeholder="Chase Visa, student loan…" /></label>
+          <label>Type
+            <select id="debt-type">
+              <option value="credit_card">Credit card</option>
+              <option value="auto">Auto loan</option>
+              <option value="student">Student loan</option>
+              <option value="mortgage">Mortgage</option>
+              <option value="medical">Medical</option>
+              <option value="personal">Personal loan</option>
+              <option value="collections">In collections</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Balance ($) <input id="debt-balance" type="number" min="0" step="0.01" value="0" /></label>
+          <label>APR (%) <input id="debt-apr" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Minimum payment ($) <input id="debt-min" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Past due ($) <input id="debt-pastdue" type="number" min="0" step="0.01" value="0" /></label>
+          <label class="checkbox"><input type="checkbox" id="debt-secured" /> Secured (car, house)</label>
+          <label class="checkbox"><input type="checkbox" id="debt-collections" /> Currently in collections</label>
+        </div>
+        <button type="button" id="add-debt" class="btn btn-secondary btn-sm">+ Add debt</button>
+      </div>
+    </section>
+
+    <!-- Step 6: Credit & collections -->
+    <section id="step-6" class="step card hidden">
+      <h2>Step 6 — Credit & collections</h2>
+      <p class="muted small">Self-reported snapshot — not pulled from a bureau.</p>
+      <form id="form-6">
+        <div class="inline-form-grid">
+          <label>Score range
+            <select name="score_band">
+              <option value="excellent">Excellent (780+)</option>
+              <option value="good">Good (720–779)</option>
+              <option value="fair">Fair (660–719)</option>
+              <option value="poor">Poor (below 660)</option>
+              <option value="unknown">I don't know</option>
+            </select>
+          </label>
+          <label>Estimated score (optional) <input name="estimated_score" type="number" min="300" max="850" placeholder="e.g. 680" /></label>
+          <label>Credit utilization (%) <input name="utilization_pct" type="number" min="0" max="100" value="30" /></label>
+          <label>Total credit limits ($) <input name="total_credit_limit" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Revolving balances ($) <input name="total_revolver_balance" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Charge-offs (count) <input name="charge_offs" type="number" min="0" value="0" /></label>
+          <label>Bankruptcies (count) <input name="bankruptcies" type="number" min="0" value="0" /></label>
+          <label>Hard inquiries (last 6 mo) <input name="inquiries_6mo" type="number" min="0" value="0" /></label>
+        </div>
+        <label class="checkbox"><input type="checkbox" name="late_payments_12mo" /> Late payments in last 12 months</label>
+        <label class="checkbox"><input type="checkbox" name="collections" /> Collections on credit report</label>
+      </form>
+      <h3 class="form-sub">Collection accounts</h3>
+      <div id="collection-list" class="line-item-list"></div>
+      <div class="inline-form card inner">
+        <div class="inline-form-grid">
+          <label>Creditor <input id="coll-creditor" placeholder="Agency or original creditor" /></label>
+          <label>Balance ($) <input id="coll-balance" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Status
+            <select id="coll-status">
+              <option value="open">Open</option>
+              <option value="paid">Paid / settled</option>
+              <option value="disputed">Disputed</option>
+            </select>
+          </label>
+          <label>Notes <input id="coll-notes" placeholder="Optional" /></label>
+        </div>
+        <button type="button" id="add-collection" class="btn btn-secondary btn-sm">+ Add collection</button>
+      </div>
+    </section>
+
+    <!-- Step 7: Business budget -->
+    <section id="step-7" class="step card hidden">
+      <h2>Step 7 — Business budget (Profit First)</h2>
+      <p class="muted small">Split every deposit before it disappears — percentages must sum to 100%.</p>
+      <form id="form-7">
+        <label>Business type <input name="business_type" placeholder="LLC consulting, sole prop…" /></label>
+        <label>Monthly business revenue ($) <input name="monthly_revenue" type="number" min="0" step="0.01" /></label>
+        <label>Profit % <input name="profit_pct" type="number" min="0" max="100" value="5" /></label>
+        <label>Tax reserve % <input name="tax_pct" type="number" min="0" max="100" value="15" /></label>
+        <label>Owner pay % <input name="owner_pay_pct" type="number" min="0" max="100" value="50" /></label>
+        <label>OpEx % <input name="opex_pct" type="number" min="0" max="100" value="30" /></label>
+      </form>
+    </section>
+
+    <!-- Step 8: Footprints -->
+    <section id="step-8" class="step card hidden">
+      <h2>Step 8 — Behavioral mirror (optional)</h2>
+      <p class="muted small">Optional footprint toggles for spending patterns — your Step 2–4 numbers stay authoritative.</p>
+      <div class="connect-grid">
+        <button type="button" class="connect-btn" data-source="banking">Connect banking (demo)</button>
+        <button type="button" class="connect-btn" data-source="calendar">Connect calendar (demo)</button>
+        <button type="button" class="connect-btn" data-source="screen_time">Connect screen time (demo)</button>
+      </div>
+      <p id="connect-status" class="muted small"></p>
+    </section>
+
+    <!-- Step 9: Contract -->
+    <section id="step-9" class="step card hidden">
+      <h2>Step 9 — Contract</h2>
+      <p>For the next <strong>six months</strong>, you commit to the system's structural rules: 15/65/20, Fork Moments, and Creation Hour.</p>
+      <p class="contract-text">I choose direction over comfort. I am the architect—not the engine.</p>
+      <label class="checkbox">
+        <input type="checkbox" id="contract-check" />
+        I sign this contract with my future self
+      </label>
+      <p class="small muted disclaimer">Educational guidance only — not licensed tax, legal, or credit repair advice.</p>
+    </section>
+
+    <div class="btn-row">
+      <button type="button" id="btn-back" class="btn btn-secondary hidden">Back</button>
+      <button type="button" id="btn-next" class="btn">Continue</button>
+    </div>
+  </main>
+  <script type="module" src="/static/js/onboarding.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Studio — Architect Blueprint</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <nav class="nav" id="nav"></nav>
+  <main class="container">
+    <header>
+      <h1>Architect Studio</h1>
+      <p class="muted">Create deliverables — financial reports, pitch decks, images, and video. Uses your intake profile when available.</p>
+    </header>
+    <p id="studio-status" class="alert hidden"></p>
+    <p class="small muted disclaimer">Educational / creative outputs only — verify numbers and compliance before sharing externally.</p>
+
+    <section class="card" id="report-templates-section">
+      <h2>Financial report templates</h2>
+      <p class="muted small">One-click reports from your intake numbers — PDF (when available), HTML, and Markdown. No AI wait.</p>
+      <div id="report-templates" class="report-templates-grid"></div>
+      <p id="report-gen-status" class="small muted"></p>
+    </section>
+
+    <section class="card" id="pitch-card-section">
+      <h2>Pitch card templates</h2>
+      <p class="muted small">Single 16:9 slides for networking, proposals, and social — filled with your trade and numbers.</p>
+      <div id="pitch-card-templates" class="report-templates-grid"></div>
+      <p id="pitch-gen-status" class="small muted"></p>
+    </section>
+
+    <section class="card preview-panel hidden" id="preview-section">
+      <div class="preview-head">
+        <h2 id="preview-title">Preview</h2>
+        <div class="preview-actions">
+          <a id="preview-download" class="btn btn-secondary btn-sm" href="#" target="_blank" rel="noopener">Download</a>
+          <button type="button" id="close-preview" class="btn btn-secondary btn-sm">Close</button>
+        </div>
+      </div>
+      <div id="preview-markdown" class="preview-markdown hidden"></div>
+      <div id="preview-frame-wrap" class="preview-frame-wrap">
+        <iframe id="preview-frame" title="Document preview" class="hidden"></iframe>
+        <img id="preview-image" alt="" class="hidden" />
+        <video id="preview-video" controls class="hidden"></video>
+      </div>
+    </section>
+
+    <section class="card" id="pitch-card-section">
+      <h2>Pitch card templates</h2>
+      <p class="muted small">Single-slide 16:9 cards for networking, proposals, and social — filled with your profile data.</p>
+      <div id="pitch-card-templates" class="report-templates-grid"></div>
+      <p id="pitch-gen-status" class="small muted"></p>
+    </section>
+
+    <section class="card preview-panel hidden" id="preview-section">
+      <div class="preview-head">
+        <div>
+          <h2>Preview</h2>
+          <p id="preview-label" class="muted small"></p>
+        </div>
+        <div class="btn-row">
+          <a id="preview-download" class="btn btn-secondary btn-sm" href="#" target="_blank" rel="noopener">Download</a>
+          <button type="button" id="close-preview" class="btn btn-secondary btn-sm">Close</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <iframe id="preview-frame" class="preview-frame hidden" title="Document preview"></iframe>
+        <img id="preview-image" class="preview-image hidden" alt="Image preview" />
+        <pre id="preview-markdown" class="preview-markdown hidden"></pre>
+      </div>
+    </section>
+
+    <div id="starter-chips" class="emotion-btns" style="margin: 1rem 0;"></div>
+
+    <section class="card">
+      <div class="studio-layout">
+        <div class="studio-chat">
+          <div id="chat-log" class="chat-log"></div>
+          <form id="chat-form" class="fork-form">
+            <input id="chat-input" placeholder="Describe what to create…" required />
+            <button type="submit" class="btn">Create</button>
+          </form>
+        </div>
+        <aside class="studio-sidebar">
+          <h2>Your files</h2>
+          <p class="muted small">Downloads from ./mnt — refresh after each creation.</p>
+          <button type="button" id="refresh-artifacts" class="btn btn-secondary btn-sm">Refresh list</button>
+          <ul id="artifact-list" class="artifact-list"></ul>
+          <p id="artifact-empty" class="muted small">No files yet. Ask for a report, deck, image, or video.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/static/js/studio.js"></script>
+</body>
+</html>

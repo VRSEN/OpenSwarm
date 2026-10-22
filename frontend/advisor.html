@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ask Advisor — Architect Blueprint</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <nav class="nav" id="nav"></nav>
+  <main class="container">
+    <header>
+      <h1>Ask Advisor</h1>
+      <p class="muted">Chat with your Architect Blueprint specialists — answers use your intake profile.</p>
+      <p class="muted small">Need a PDF, pitch deck, image, or video? Use <a href="/static/studio.html">Studio</a> instead.</p>
+    </header>
+    <p id="advisor-status" class="alert hidden"></p>
+    <div id="esbi-context" class="card esbi-context hidden"></div>
+    <p class="small muted disclaimer">Educational guidance only — not licensed tax, legal, or investment advice.</p>
+
+    <div id="starter-chips" class="emotion-btns" style="margin: 1rem 0;"></div>
+
+    <section class="card chat-panel">
+      <div class="chat-toolbar">
+        <span class="small muted">Conversations are saved so your advisor remembers you.</span>
+        <button type="button" id="clear-chat" class="btn btn-secondary btn-sm">Clear chat</button>
+      </div>
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="fork-form">
+        <input id="chat-input" placeholder="Ask about debt, taxes, budget, credit…" required />
+        <button type="submit" class="btn">Send</button>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="/static/js/advisor.js"></script>
+</body>
+</html>

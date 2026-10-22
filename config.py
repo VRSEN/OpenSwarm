@@ -2,9 +2,14 @@
 import os
 
 
+def _configured_model() -> str:
+    """Return DEFAULT_MODEL when set to a non-empty value, else empty string."""
+    return (os.getenv("DEFAULT_MODEL") or "").strip()
+
+
 def get_default_model(fallback: str = "gpt-5.4"):
     """Return the configured default model for standard agents."""
-    model = os.getenv("DEFAULT_MODEL", fallback)
+    model = _configured_model() or fallback
     return _resolve(model)
 
 
@@ -15,7 +20,8 @@ def is_openai_provider() -> bool:
     Any 'provider/model' string (e.g. 'anthropic/claude-sonnet-4-6',
     'litellm/gemini/gemini-3-flash') is treated as a LiteLLM-routed model.
     """
-    return "/" not in os.getenv("DEFAULT_MODEL", "")
+    model = _configured_model() or "gpt-5.2"
+    return "/" not in model
 
 
 def _resolve(model: str):

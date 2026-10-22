@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Learn — Financial Literacy</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <nav class="nav" id="nav"></nav>
+  <main class="container">
+    <header>
+      <h1>Financial Literacy</h1>
+      <p class="muted">Built for self-employed operators — lessons, exercises, and a Wealth Playbook of mistakes vs strategies.</p>
+    </header>
+    <section class="card" id="playbook-section">
+      <h2>Wealth Playbook</h2>
+      <p class="muted small">Quick reference from your research — filter by type, then open full lessons below.</p>
+      <div id="playbook-filters" class="emotion-btns" style="margin: 0.75rem 0;"></div>
+      <div id="playbook-grid" class="playbook-grid"></div>
+    </section>
+    <h2 class="guide-sub" style="margin-top: 1.5rem;">Full lessons</h2>
+    <p id="error" class="error"></p>
+    <div id="module-list"></div>
+  </main>
+  <script type="module" src="/static/js/learn.js"></script>
+</body>
+</html>

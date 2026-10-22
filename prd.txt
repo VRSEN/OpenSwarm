@@ -1,0 +1,551 @@
+# Architect Blueprint — OmniWealth (merged Cash Flow Mastery + genaWealth)
+
+**Product home:** this repo (`valuSwarm`). genaWealth’s local JSON/scripts are **capabilities absorbed here** (net worth, capital waterfall, two-key underwriting, reinvestment compare). Do not run two financial systems.
+
+**Smart risk:** Gates protect survival capital. Guardrails cap **max plausible loss**. The user is expected to take intelligent bets (flips, trades, crypto, Kalshi, equipment) using a written playbook. The system **recommends and tracks**; it does **not** auto-trade or move bank funds.
+
+---
+
+- **Purpose:** A mechanical wealth-building system for self-employed architects of their own financial life. The user is the **architect, not the engine**—the machine must survive even when the architect is tired or unmotivated. Prioritize **systems over motivation**, **retention over earning**, and **leverage over effort**. Automate the mandatory Cash Flow Mastery sequence from Stability Fund creation through Skill Stacking, Asset Acquisition, and Financial Sovereignty.
+
+- **Design Philosophy:**
+  - Mechanical execution removes emotion from money flows.
+  - Money Velocity (capital recycle speed) beats volume.
+  - Character is an economic asset—reputation credit travels ahead of the user.
+  - Debt is permitted for acquisition only—never for ego.
+  - The Asset Formula governs all leverage: **Asset Yield > Cost of Capital + Friction/Expenses**.
+  - UI favors focus over stimulation: silent dashboards, identity notifications, solitude mode.
+
+- **Communication Flows:**
+  - **Between Agents:**
+    - **Mandatory Stage Sequence:** Stability → Skill Stacking → Asset Acquisition → Sovereignty. No stage skipping.
+    - **Architect Orchestrator** receives all requests, assesses stage, enforces gates, routes to one of six specialists.
+    - **Sequential onboarding pipeline:** Orchestrator → Cash Flow Engineer (15/65/20 + Stability Fund) → Behavioral Mirror (pause rules + invisible transactions) → Opportunity Scanner (when Stability Fund ≥ 3 months) → Leverage Strategist (when spread-positive assets identified) → Reputation Validator (when external providers engaged) → Legacy Architect (Sovereignty stage or net worth threshold).
+    - **Financial Analyst** is a cross-cutting support agent for Velocity Tracker, Reputation Credit Dashboard, Silent Dashboard, and Plaid categorization feeds.
+    - **Example Flow — Stability Fund:**
+      - **User → Architect Orchestrator:** "I earn $7,200/month but have no cushion."
+      - **Orchestrator → Cash Flow Engineer:** Assign dollar jobs via 15/65/20; calculate Stability Fund target (3–6 months essentials).
+      - **Cash Flow Engineer → Behavioral Mirror:** Flag recent invisible transactions blocking fund progress.
+      - **Behavioral Mirror → User:** Identity notification + 72-hour pause on flagged spend.
+    - **Example Flow — High-Velocity Arbitrage:**
+      - **User → Architect Orchestrator:** "I have $25/day to deploy for 7 days."
+      - **Orchestrator → Opportunity Scanner:** Scan five Invisible Gaps; score Money Velocity.
+      - **Opportunity Scanner → Leverage Strategist:** Validate spread on shortlisted projects.
+      - **Leverage Strategist → Reputation Validator:** Vet service providers for behavioral trust.
+      - **Opportunity Scanner → User:** Ranked micro-investment projects with 1–7 day payout profiles.
+
+  - **Agent to User Communication:**
+    - Chat-first via Agency Swarm TUI/API.
+    - **Identity-Based Notifications** only—never goal-based alerts (e.g., "You are an architect who protects their future" not "You saved $50").
+    - **Friction-Based UX:** Gated modules unlock by stage; pre-gate modules remain intentionally invisible.
+    - **Solitude Mode:** 6-Month Focus Season flag suppresses non-essential agent prompts and consumption-oriented features.
+    - Deliverables saved to agent `files/` folders with explicit paths.
+
+---
+
+## Mandatory Stage Sequence (Cash Flow Mastery)
+
+| Stage | Exit Criteria | Primary Agent | Blocked Until Complete |
+|-------|---------------|---------------|------------------------|
+| **Stability** | 3–6 month Stability Fund fully funded (Essentials bucket surplus) | Cash Flow Engineer | Skill Stacking, Asset Acquisition, Sovereignty modules |
+| **Skill Stacking** | Income density ↑ 20%+ (revenue per hour) vs baseline | Leverage Strategist | Asset Acquisition, Sovereignty |
+| **Asset Acquisition** | ≥ 1 scalable IP asset OR cash-flowing instrument with positive spread | Opportunity Scanner + Leverage Strategist | Sovereignty |
+| **Sovereignty** | Passive + asset yield covers ≥ 100% essentials; Step-Up Basis Vault documented | Legacy Architect | None (maintenance mode) |
+
+---
+
+## Architect Orchestrator
+
+### Role within the Agency
+
+Thin routing layer. Assesses current Cash Flow Mastery stage, enforces mandatory sequence gates, activates Solitude Mode rules, and routes to the correct specialist. Never executes mechanical allocations, arbitrage scans, or spread math.
+
+### Tools
+
+- **AssessArchitectStage:**
+  - **Description**: Determines Stability / Skill Stacking / Asset Acquisition / Sovereignty stage from fund balance, income density, asset spread, and sovereignty coverage.
+  - **Inputs**:
+    - monthly_essentials (float) - non-negotiable monthly burn
+    - stability_fund_balance (float) - dedicated Stability Fund balance
+    - stability_fund_target_months (int, default 4) - target 3–6 months
+    - revenue_per_hour (float) - current income density
+    - baseline_revenue_per_hour (float) - starting density for Skill Stacking comparison
+    - positive_spread_assets (int, default 0) - count of assets passing Asset Formula
+    - passive_covers_essentials_pct (float, default 0) - % of essentials covered by passive yield
+    - solitude_mode_active (bool, default False)
+  - **Validation**: monthly_essentials > 0; stability_fund_target_months between 3 and 6
+  - **Core Functions**: Stage label, gate matrix, route_to_agent, unlocked_modules
+  - **Output**: JSON stage report with gates and next mechanical action
+
+- **GenerateArchitectRoadmap:**
+  - **Description**: Stage-by-stage mechanical plan aligned to Cash Flow Mastery sequence.
+  - **Inputs**:
+    - current_stage (str)
+    - monthly_essentials (float)
+    - monthly_gross_income (float)
+    - target_sovereignty_income (float) - passive + asset yield target
+    - focus_season_months (int, default 6) - Solitude Mode duration
+  - **Validation**: current_stage in valid enum
+  - **Output**: JSON roadmap with stage milestones, 15/65/20 targets, and Solitude Mode schedule
+
+---
+
+## Behavioral Mirror (Accountability Agent)
+
+### Role within the Agency
+
+Scientific mirror of user behavior. Identifies **invisible transactions** (emotion-triggered spending invisible to budgets), enforces the **72-hour Pause Rule** for non-essential purchases, and generates **identity-based notifications**. Does not judge—reflects patterns and enforces mechanical pauses.
+
+### Tools
+
+- **DetectInvisibleTransaction:**
+  - **Description**: Flags transactions that bypass the 15/65/20 plan (impulse, status, comfort triggers).
+  - **Inputs**:
+    - transaction_amount (float)
+    - transaction_category (str)
+    - stated_budget_bucket (str) - future|essentials|life|unassigned
+    - emotional_trigger (str, optional) - stress|boredom|status|social|unknown
+    - time_of_day (str, optional)
+    - days_since_last_similar (int, default 0)
+  - **Validation**: transaction_amount > 0
+  - **Core Functions**: Classify visibility (visible|invisible), trigger pattern, recommended pause
+  - **Output**: JSON classification with mirror reflection (factual, non-judgmental)
+
+- **Enforce72HourPauseRule:**
+  - **Description**: Creates a mandatory 72-hour hold on non-essential purchases before approval.
+  - **Inputs**:
+    - item_description (str)
+    - amount (float)
+    - bucket (str) - must be "life" or "unassigned" for non-essential
+    - is_essential (bool, default False)
+  - **Validation**: amount > 0
+  - **Core Functions**: Start pause clock, return unlock timestamp, log to behavior journal
+  - **Output**: JSON pause record with unlock_at ISO timestamp
+
+- **GenerateIdentityNotification:**
+  - **Description**: Produces identity-based (not goal-based) notification text.
+  - **Inputs**:
+    - architect_identity (str, default "architect who protects their future")
+    - recent_behavior (str) - brief factual behavior summary
+    - stage (str)
+  - **Output**: JSON notification string following identity frame
+
+- **LogBehaviorPattern:**
+  - **Description**: Persists behavior events to local journal for pattern analysis.
+  - **Inputs**:
+    - action (str) - add|list|summary
+    - event_type (str, optional) - pause|invisible|approved|resisted
+    - metadata (dict, optional)
+  - **Output**: JSON journal entry or pattern summary
+
+---
+
+## Cash Flow Engineer (Mechanical Agent)
+
+### Role within the Agency
+
+Executes the **15/65/20 Principle**: 15% Future, 65% Essentials, 20% Life. Assigns a **job to every dollar before it arrives**. Automates Stability Fund tracking, debt snowball for assets (debt > 7–8% APR), and prepares Plaid categorization rules.
+
+### Tools
+
+- **Enforce156520Allocation:**
+  - **Description**: Splits gross inflow into Future (15%), Essentials (65%), Life (20%) before spending.
+  - **Inputs**:
+    - gross_inflow (float)
+    - future_pct (float, default 15)
+    - essentials_pct (float, default 65)
+    - life_pct (float, default 20)
+  - **Validation**: percentages sum to 100; gross_inflow > 0
+  - **Output**: JSON bucket amounts + transfer checklist
+
+- **AssignDollarJobs:**
+  - **Description**: Pre-assigns every expected dollar in the next 30 days to a named job before arrival.
+  - **Inputs**:
+    - expected_inflows (list[dict]) - date, amount, source
+    - job_assignments (list[dict]) - job_name, bucket, amount
+    - stability_fund_shortfall (float, default 0)
+  - **Validation**: sum of job amounts ≤ sum of expected inflows
+  - **Output**: JSON dollar job ledger
+
+- **AutomateStabilityFund:**
+  - **Description**: Tracks 3–6 month Stability Fund progress and auto-allocates from Future bucket surplus.
+  - **Inputs**:
+    - monthly_essentials (float)
+    - stability_fund_balance (float)
+    - target_months (int, default 4) - 3 to 6
+    - future_bucket_monthly (float) - available from 15% Future allocation
+  - **Validation**: target_months 3–6
+  - **Output**: JSON fund target, progress_pct, months_to_funded, auto_transfer_amount
+
+- **ExecuteDebtSnowballForAssets:**
+  - **Description**: Prioritizes high-interest debt (>7–8% APR) using positive spread surplus as guaranteed return.
+  - **Inputs**:
+    - debts (list[dict]) - name, balance, apr, minimum_payment
+    - available_surplus (float) - from Future or spread surplus
+    - apr_threshold (float, default 7.5)
+  - **Validation**: at least one debt; all APRs ≥ 0
+  - **Output**: JSON snowball order, guaranteed_return_pct, monthly plan
+
+- **CategorizeCashFlowRules:**
+  - **Description**: Defines Plaid/API categorization rules mapping transactions to Future/Essentials/Life buckets.
+  - **Inputs**:
+    - merchant_rules (dict) - merchant_pattern: bucket
+    - default_bucket (str, default "essentials")
+  - **Output**: JSON rule set for automated categorization (Plaid integration ready)
+
+---
+
+## Opportunity Scanner (Arbitrage Agent)
+
+### Role within the Agency
+
+Scans five **Invisible Gaps**: Convenience, Information, Connection, Skill, and Attention. Prioritizes **Money Velocity** over volume. Funds high-velocity micro-projects (e.g., $1,500 project via $25/day micro-investments, 1–7 day payouts).
+
+### Tools
+
+- **ScanInvisibleGaps:**
+  - **Description**: Identifies arbitrage opportunities across five gap types.
+  - **Inputs**:
+    - gap_types (list[str]) - convenience|information|connection|skill|attention
+    - available_capital (float)
+    - max_days_to_payout (int, default 7)
+    - user_skills (list[str], optional)
+  - **Validation**: at least one gap type; available_capital ≥ 0
+  - **Output**: JSON opportunity list per gap with friction and capital requirements
+
+- **ScoreMoneyVelocity:**
+  - **Description**: Tracks Money Velocity—how quickly capital recycles from investment back to profit (not volume).
+  - **Inputs**:
+    - capital_deployed (float)
+    - profit_returned (float)
+    - days_to_recycle (int)
+    - recycle_count (int, default 1) - times capital reused in period
+  - **Validation**: days_to_recycle ≥ 1; capital_deployed > 0
+  - **Core Functions**: velocity = (profit_returned / capital_deployed) × (365 / days) × recycle_count
+  - **Output**: JSON velocity score, tier, comparison to volume-based ROI
+
+- **FundMicroInvestmentProject:**
+  - **Description**: Structures micro-investment funding plan ($25/day etc.) for 1–7 day payout projects.
+  - **Inputs**:
+    - project_name (str)
+    - total_capital_needed (float)
+    - daily_micro_amount (float, default 25)
+    - expected_payout_days (int) - 1 to 7
+    - expected_profit (float)
+    - gap_type (str)
+  - **Validation**: expected_payout_days 1–7; daily_micro_amount > 0
+  - **Output**: JSON funding schedule, velocity projection, go/no-go
+
+- **TrackVelocityPipeline:**
+  - **Description**: Local pipeline of velocity-ranked projects with recycle tracking.
+  - **Inputs**:
+    - action (str) - add|update|list|recycle
+    - project_data (dict, optional)
+  - **Output**: JSON pipeline sorted by Money Velocity
+
+---
+
+## Leverage Strategist (Mathematical Agent)
+
+### Role within the Agency
+
+Calculates the **Spread** (Asset Yield − Cost of Capital). Ensures debt is used for **acquisition only, never ego**. Models Skill Stacking ROI (income density). Applies the **Asset Formula**: Asset Yield > Cost of Capital + Friction/Expenses.
+
+### Tools
+
+- **CalculateSpread:**
+  - **Description**: Computes spread and pass/fail against friction threshold.
+  - **Inputs**:
+    - asset_yield_pct (float) - annual yield on asset
+    - cost_of_capital_pct (float) - APR on debt or opportunity cost
+    - friction_expenses_pct (float, default 2) - fees, taxes, operational friction
+    - asset_name (str)
+  - **Validation**: all rates ≥ 0
+  - **Core Functions**: spread = yield − CoC − friction; pass if spread > 0
+  - **Output**: JSON spread, pass/fail, recommendation
+
+- **ValidateAcquisitionDebt:**
+  - **Description**: Approves or denies debt requests—acquisition vs ego classification.
+  - **Inputs**:
+    - debt_purpose (str)
+    - purpose_category (str) - acquisition|ego|consumption|cash_flow
+    - amount (float)
+    - asset_yield_pct (float, default 0)
+    - cost_of_capital_pct (float)
+  - **Validation**: purpose_category in enum; amount > 0
+  - **Output**: JSON verdict (approved|denied), spread if acquisition, mirror message
+
+- **ApplyAssetFormula:**
+  - **Description**: Full Asset Formula evaluation for a proposed acquisition.
+  - **Inputs**:
+    - asset_name (str)
+    - asset_yield_pct (float)
+    - cost_of_capital_pct (float)
+    - friction_expenses_pct (float)
+    - acquisition_cost (float)
+  - **Output**: JSON formula breakdown, minimum yield required, proceed/hold/reject
+
+- **ModelIncomeDensity:**
+  - **Description**: Models Skill Stacking ROI—revenue per hour improvement from skill investment.
+  - **Inputs**:
+    - current_revenue_per_hour (float)
+    - hours_invested_in_skill (float)
+    - skill_cost (float)
+    - projected_revenue_per_hour (float)
+    - months_to_realize (int, default 3)
+  - **Output**: JSON density delta, ROI, Skill Stacking stage progress
+
+---
+
+## Reputation Validator (Vetting Agent)
+
+### Role within the Agency
+
+Manages the **Reputation Credit System**. Audits behavioral trust (consistency, follow-through) of service providers. Treats character as an economic asset—reputation credit travels ahead of the user.
+
+### Tools
+
+- **ScoreReputationCredit:**
+  - **Description**: Computes user's behavioral credit score from self-trust and external reliability evidence.
+  - **Inputs**:
+    - self_trust_events (list[dict]) - event, kept_commitment (bool), date
+    - external_reliability_events (list[dict]) - provider, delivered (bool), date
+    - lookback_days (int, default 90)
+  - **Validation**: at least one event in either list
+  - **Core Functions**: Weighted score 0–100; self-trust 40%, external 60%
+  - **Output**: JSON score, tier, trend
+
+- **AuditProviderBehavioralTrust:**
+  - **Description**: Vets a service provider on consistency and follow-through.
+  - **Inputs**:
+    - provider_name (str)
+    - engagements (list[dict]) - date, promised, delivered, on_time (bool)
+    - references_verified (int, default 0)
+  - **Output**: JSON trust score, flags, hire/avoid/monitor verdict
+
+- **UpdateReputationDashboard:**
+  - **Description**: Persists and returns reputation credit dashboard state.
+  - **Inputs**:
+    - action (str) - update|get|export
+    - score_data (dict, optional)
+  - **Output**: JSON dashboard with score history and traveling-ahead summary
+
+- **VetServiceProvider:**
+  - **Description**: Combined vetting checklist before engaging provider on velocity project.
+  - **Inputs**:
+    - provider_name (str)
+    - project_value (float)
+    - trust_score (float, optional) - from AuditProviderBehavioralTrust
+    - min_trust_threshold (float, default 70)
+  - **Output**: JSON vet result with economic risk note
+
+---
+
+## Legacy Architect (Generational Agent)
+
+### Role within the Agency
+
+Manages **Buy-Borrow-Die** strategy. Documents **Step-Up in Basis** for heirs to legally minimize capital gains. Operates Sovereign Positioning vault with encryption for generational transfer data.
+
+### Tools
+
+- **DocumentStepUpInBasis:**
+  - **Description**: Creates structured basis documentation record for heir step-up at death.
+  - **Inputs**:
+    - asset_name (str)
+    - acquisition_date (str) - ISO date
+    - cost_basis (float)
+    - current_fair_market_value (float)
+    - documentation_refs (list[str]) - receipt/appraisal file paths or IDs
+    - heir_designation (str, optional)
+  - **Validation**: cost_basis ≥ 0; current_fmv ≥ cost_basis
+  - **Output**: JSON basis record with step-up benefit estimate
+
+- **PlanBuyBorrowDieStrategy:**
+  - **Description**: Outlines Buy-Borrow-Die sequence for appreciating assets.
+  - **Inputs**:
+    - assets (list[dict]) - name, fmv, basis, annual_appreciation_pct
+    - borrowing_capacity_pct (float, default 50) - LTV for borrowing against assets
+    - estate_planning_goal (str, default "step_up_for_heirs")
+  - **Output**: JSON phased plan: buy → borrow against → die with step-up
+
+- **EncryptSovereignVault:**
+  - **Description**: Encrypts and stores Step-Up Basis and Sovereign Positioning documents locally.
+  - **Inputs**:
+    - action (str) - store|retrieve|list
+    - document_id (str, optional)
+    - payload (dict, optional) - data to encrypt
+    - vault_key_env (str, default "SOVEREIGN_VAULT_KEY") - encryption key from env
+  - **Validation**: store requires payload; retrieve requires document_id
+  - **Core Functions**: Fernet encryption (cryptography lib); never store key in files
+  - **Output**: JSON document_id or retrieved payload reference
+
+- **GenerateGenerationalTransferPlan:**
+  - **Description**: Summarizes transfer plan with basis documentation checklist for heirs.
+  - **Inputs**:
+    - heir_names (list[str])
+    - assets_documented (list[str]) - asset IDs from vault
+    - estimated_step_up_benefit (float)
+  - **Output**: JSON transfer plan and heir checklist
+
+---
+
+## Financial Analyst (Support Agent — Dashboards & Integration)
+
+### Role within the Agency
+
+Cross-cutting analyst. Builds **Velocity Tracker**, **Reputation Credit Dashboard**, **Silent Dashboard** (minimal KPIs), processes Plaid categorization feeds, and enforces **Solitude Mode** gating on non-essential outputs.
+
+### Tools
+
+- **TrackMoneyVelocityDashboard:**
+  - **Description**: Aggregates velocity metrics across pipeline for Silent Dashboard display.
+  - **Inputs**:
+    - velocity_records (list[dict]) - from Opportunity Scanner pipeline
+    - period_days (int, default 30)
+  - **Output**: JSON dashboard: avg velocity, recycle rate, top projects
+
+- **GenerateReputationCreditDashboard:**
+  - **Description**: Renders reputation credit score history and provider trust summary.
+  - **Inputs**:
+    - score_history (list[dict])
+    - provider_audits (list[dict], optional)
+  - **Output**: JSON dashboard + optional PNG chart path
+
+- **GenerateSilentDashboard:**
+  - **Description**: Minimalist KPI view—3 numbers max, no stimulation.
+  - **Inputs**:
+    - stability_fund_pct (float)
+    - money_velocity_score (float)
+    - reputation_credit (float)
+    - stage (str)
+    - solitude_mode (bool, default False)
+  - **Output**: JSON silent dashboard (max 3 KPIs + identity line)
+
+- **AnalyzeCashFlowData:**
+  - **Description**: Parses transaction CSV; maps to Future/Essentials/Life buckets.
+  - **Inputs**: csv_path, date_column, amount_column, category_column, bucket_mapping (dict, optional)
+  - **APIs**: pandas; Plaid feed compatible
+  - **Output**: JSON KPIs + bucket breakdown
+
+- **CheckSolitudeModeGate:**
+  - **Description**: Returns which modules/notifications are suppressed during 6-Month Focus Season.
+  - **Inputs**:
+    - solitude_mode_active (bool)
+    - focus_season_start (str, optional) - ISO date
+    - focus_season_months (int, default 6)
+  - **Output**: JSON allowed_modules, suppressed_modules, days_remaining
+
+---
+
+## Core Platform Features
+
+### Velocity Tracker
+- Tracks Money Velocity (capital recycle speed), not transaction volume.
+- Owned by Opportunity Scanner; dashboard by Financial Analyst.
+- Formula: `(profit / capital) × (365 / days) × recycle_count`
+
+### Reputation Credit Dashboard
+- Behavioral score 0–100 from self-trust + external reliability.
+- "Travels ahead" summary exported for provider negotiations.
+- Owned by Reputation Validator; visualized by Financial Analyst.
+
+### Friction-Based UX (Gated Modules)
+| Module | Unlocks At |
+|--------|------------|
+| Stability Fund automation | Stage: Stability (entry) |
+| 72-Hour Pause | Stage: Stability |
+| Invisible Gap Scanner | Stability Fund ≥ 3 months |
+| Micro-Investment Projects | Stage: Skill Stacking |
+| Spread Calculator | Stage: Asset Acquisition |
+| Buy-Borrow-Die Vault | Stage: Sovereignty |
+
+### Debt Snowball for Assets
+- Targets debt APR > 7–8% using spread surplus as guaranteed return.
+- Owned by Cash Flow Engineer; validated by Leverage Strategist.
+
+---
+
+## UI/UX Principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Silent Dashboard** | Max 3 KPIs; no charts unless user requests; muted palette |
+| **Identity Notifications** | Behavioral Mirror generates identity-frame messages only |
+| **Solitude Mode** | 6-Month Focus Season; suppresses consumption prompts and non-essential agent chatter |
+| **Intentional Invisibility** | Locked modules hidden (not grayed teaser)—user discovers by stage progression |
+
+---
+
+## Technical Logic
+
+### Asset Formula
+```
+PASS if: Asset Yield % > Cost of Capital % + Friction/Expenses %
+Spread = Asset Yield % − Cost of Capital % − Friction %
+```
+
+### 15/65/20 Principle
+```
+Future (15%)     → Stability Fund, debt snowball, investments
+Essentials (65%) → Non-negotiable operating and living costs
+Life (20%)       → Discretionary; subject to 72-hour pause rule
+```
+
+### Security — Step-Up Basis Vault
+- `EncryptSovereignVault` uses Fernet symmetric encryption.
+- Key stored only in `SOVEREIGN_VAULT_KEY` environment variable.
+- Encrypted files stored in `legacy_architect/files/vault/` (gitignored).
+- Never log decrypted payload.
+
+### Data Integration
+| System | Purpose | Auth |
+|--------|---------|------|
+| **Plaid** | Automated transaction categorization → 15/65/20 buckets | PLAID_CLIENT_ID, PLAID_SECRET |
+| **QuickBooks/Xero** | Business cash flow sync | Composio OAuth |
+| **Stripe** | Payment inflow detection | Composio API key |
+
+---
+
+## Required Environment Variables
+
+```
+OPENAI_API_KEY=              # Required
+DEFAULT_MODEL=gpt-5.2          # Optional
+SOVEREIGN_VAULT_KEY=           # Required for Legacy Architect vault (32-byte base64 Fernet key)
+PLAID_CLIENT_ID=               # Optional — automated categorization
+PLAID_SECRET=                  # Optional
+COMPOSIO_API_KEY=              # Optional — accounting integrations
+```
+
+---
+
+## Agent Communication Topology
+
+```
+User → Architect Orchestrator
+         ├── Behavioral Mirror      (behavior, pause, identity)
+         ├── Cash Flow Engineer     (15/65/20, Stability Fund, debt snowball)
+         ├── Opportunity Scanner    (Invisible Gaps, Money Velocity)
+         ├── Leverage Strategist    (Spread, Asset Formula, Skill Stacking)
+         ├── Reputation Validator   (Reputation Credit, provider vetting)
+         ├── Legacy Architect       (Buy-Borrow-Die, Step-Up Basis Vault)
+         └── Financial Analyst      (dashboards, Plaid feeds, Solitude Mode)
+```
+
+All specialists hand off to each other and back to Orchestrator. Financial Analyst supports all agents on data requests.
+
+---
+
+## Success Metrics (Systems Over Motivation)
+
+| Metric | Target |
+|--------|--------|
+| Stability Fund funded | 3–6 months essentials within stage timeline |
+| Income density improvement | ≥ 20% revenue/hour in Skill Stacking |
+| Positive spread assets | ≥ 1 before Sovereignty |
+| Money Velocity | Increasing recycle rate quarter-over-quarter |
+| Reputation Credit | ≥ 75 before external provider engagements > $500 |
+| Invisible transaction rate | Decreasing month-over-month |
+
+**The machine wins when the architect is tired.** Every action must be executable without motivation.

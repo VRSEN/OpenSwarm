@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your Integrity</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <nav class="nav" id="nav"></nav>
+  <main class="container">
+    <header>
+      <h1>Your Integrity</h1>
+      <p class="muted">How consistently you keep promises—to yourself and others. This is for <strong>you</strong>, not a bank score.</p>
+    </header>
+    <p id="error" class="error"></p>
+
+    <section id="day-zero-guide" class="card guide-card hidden">
+      <h2>Day Zero — what these numbers mean</h2>
+      <p id="guide-intro" class="muted small"></p>
+      <ul id="score-sources" class="guide-list"></ul>
+      <h3 class="guide-sub">What to do this week</h3>
+      <ol id="guide-steps" class="guide-steps"></ol>
+    </section>
+
+    <section class="kpi-row">
+      <div class="kpi">
+        <span class="label">Integrity Score</span>
+        <span id="composite" class="value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Tier</span>
+        <span id="tier" class="value tier">—</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Self-Trust Index</span>
+        <span id="self-trust-index" class="value">—</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>What you are building</h2>
+      <div id="pillars"></div>
+    </section>
+
+    <section class="card">
+      <h2>Private commitment</h2>
+      <p class="muted small">Set a promise only you know—daily learning block, pause rule, wake time. Keeping it raises Self-Trust.</p>
+      <form id="commit-form">
+        <label>Type
+          <select name="benchmark_type">
+            <option value="rhythm">Daily rhythm</option>
+            <option value="financial_machine">72-hour pause rule</option>
+            <option value="focus_season">Focus Season standard</option>
+            <option value="operator_standard">Weekly review</option>
+          </select>
+        </label>
+        <label>Description
+          <input name="description" required placeholder="e.g. No Life purchases over $50 without 72h pause" />
+        </label>
+        <label>Target (optional)
+          <input name="target_value" placeholder="e.g. 6am wake, 30 min learning" />
+        </label>
+        <button type="submit" class="btn">Save commitment</button>
+      </form>
+      <p id="commit-msg" class="muted small"></p>
+    </section>
+
+    <section class="card" id="check-in-section">
+      <h2>Weekly check-in</h2>
+      <p class="muted small">Saving a commitment does not move your score. Log whether you kept it—honesty builds Self-Trust.</p>
+      <div id="active-commitments"></div>
+      <p id="check-in-msg" class="muted small"></p>
+    </section>
+
+    <section>
+      <h2>Your track record</h2>
+      <p id="summary" class="summary"></p>
+    </section>
+  </main>
+  <script type="module" src="/static/js/integrity.js"></script>
+</body>
+</html>

@@ -48,3 +48,7 @@ moviepy<2
 fal-client
 httpx
 imageio-ffmpeg
+cryptography>=42.0.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+pydantic>=2.0.0

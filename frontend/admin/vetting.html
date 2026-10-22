@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Provider Vetting</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <p class="muted"><a href="/static/admin/index.html">← Admin</a></p>
+    <h1>Provider Vetting (Admin)</h1>
+    <p class="muted">Internal use only. End users will see opportunities—not this screen.</p>
+    <form id="vet-form" class="card">
+      <label>Provider name<input name="name" value="QuickDev LLC" /></label>
+      <label>References verified<input name="refs" type="number" value="2" min="0" /></label>
+      <label>Project value ($)<input name="value" type="number" value="1500" min="0" /></label>
+      <button type="submit" class="btn">Run Vetting</button>
+    </form>
+    <p id="error" class="error"></p>
+    <pre id="report" class="code"></pre>
+  </main>
+  <script type="module">
+    import { fetchJson } from "/static/js/app.js";
+    document.getElementById("vet-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const data = await fetchJson("/reputation/vet-provider", {
+          method: "POST",
+          body: JSON.stringify({
+            provider_name: fd.get("name"),
+            references_verified: Number(fd.get("refs")),
+            project_value: Number(fd.get("value")),
+            engagements: [
+              { delivered: true, on_time: true, promised: "API build" },
+              { delivered: true, on_time: false, promised: "Bug fix" },
+            ],
+          }),
+        });
+        document.getElementById("report").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("error").textContent = err.message;
+      }
+    };
+  </script>
+</body>
+</html>
