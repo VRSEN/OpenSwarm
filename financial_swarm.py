@@ -65,8 +65,10 @@ def create_agency(load_threads_callback=None):
     from image_generation_agent import create_image_generation_agent
     from legacy_architect import create_legacy_architect
     from leverage_strategist import create_leverage_strategist
+    from capital_allocator import create_capital_allocator
     from opportunity_scanner import create_opportunity_scanner
     from reputation_validator import create_reputation_validator
+    from risk_officer import create_risk_officer
     from slides_agent import create_slides_agent
     from studio_orchestrator import create_studio_orchestrator
     from tax_strategist import create_tax_strategist
@@ -78,6 +80,8 @@ def create_agency(load_threads_callback=None):
     behavioral_mirror = create_behavioral_mirror()
     cash_flow_engineer = create_cash_flow_engineer()
     opportunity_scanner = create_opportunity_scanner()
+    risk_officer = create_risk_officer()
+    capital_allocator = create_capital_allocator()
     leverage_strategist = create_leverage_strategist()
     reputation_validator = create_reputation_validator()
     legacy_architect = create_legacy_architect()
@@ -95,6 +99,8 @@ def create_agency(load_threads_callback=None):
         behavioral_mirror,
         cash_flow_engineer,
         opportunity_scanner,
+        risk_officer,
+        capital_allocator,
         leverage_strategist,
         reputation_validator,
         legacy_architect,

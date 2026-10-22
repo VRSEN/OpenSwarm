@@ -18,7 +18,7 @@ def get_character_mirror(
     user_id: str = Query(default="default"),
     essentials_pct: float = Query(default=65.0, ge=0, le=100),
     life_bucket_pct: float = Query(default=20.0, ge=0, le=100),
-    stability_fund_pct: float = Query(default=0.0, ge=0, le=100),
+    stability_fund_pct: float = Query(default=0.0, ge=0),
     money_velocity_tier: str = Query(default="B"),
     consumer_tag_count: int = Query(default=0, ge=0),
     acquirer_tag_count: int = Query(default=0, ge=0),

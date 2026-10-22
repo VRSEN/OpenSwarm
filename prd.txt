@@ -1,4 +1,8 @@
-# Architect Blueprint — Cash Flow Mastery Wealth Machine
+# Architect Blueprint — OmniWealth (merged Cash Flow Mastery + genaWealth)
+
+**Product home:** this repo (`valuSwarm`). genaWealth’s local JSON/scripts are **capabilities absorbed here** (net worth, capital waterfall, two-key underwriting, reinvestment compare). Do not run two financial systems.
+
+**Smart risk:** Gates protect survival capital. Guardrails cap **max plausible loss**. The user is expected to take intelligent bets (flips, trades, crypto, Kalshi, equipment) using a written playbook. The system **recommends and tracks**; it does **not** auto-trade or move bank funds.
 
 ---
 

@@ -100,6 +100,10 @@ The coding agent will read this file, understand the structure, and make the rig
 | Agent | Purpose |
 |---|---|
 | `orchestrator` | Routes tasks to the right specialist |
+| `architect_orchestrator` | Wealth routing + two-key smart-move gates |
+| `opportunity_scanner` | Flips, velocity, underwrite bull case |
+| `risk_officer` | Kill case — tries to break the bet |
+| `capital_allocator` | Surplus pools + risk budget |
 | `virtual_assistant` | Email, calendar, Slack, file management |
 | `deep_research` | Web research and synthesis |
 | `data_analyst_agent` | Data analysis, visualization, statistical modeling |

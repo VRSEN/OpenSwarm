@@ -3,21 +3,106 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Architect Blueprint — Command Center</title>
+  <title>OmniWealth — Command</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fraunces:opsz,wght@9..144,500&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/meridian.css?v=10" />
 </head>
-<body>
-  <nav class="nav" id="nav"></nav>
-  <main class="container" id="main-standard">
+<body class="command meridian" data-view="pulse">
+  <div class="plate" aria-hidden="true">
+    <div class="sky"></div>
+    <div class="drift"></div>
+    <div class="spot"></div>
+  </div>
+  <div class="command-shell">
+  <aside class="command-rail">
+    <div class="command-mark">OW<span>omni</span></div>
+    <nav class="nav" id="nav"></nav>
+    <p class="rail-note">Fund locked. Bets capped. You execute.</p>
+  </aside>
+  <div class="command-stage">
+  <header class="command-top">
+    <div>
+      <p class="eyebrow">OmniWealth · live desk</p>
+      <h1 id="greeting">Command</h1>
+    </div>
+    <div class="deck-switch" role="tablist">
+      <button type="button" class="deck-btn active" data-deck="pulse">1 Numbers</button>
+      <button type="button" class="deck-btn" data-deck="moves">2 One move</button>
+      <button type="button" class="deck-btn" data-deck="desk">3 Pause</button>
+    </div>
+  </header>
+  <main class="container command-grid" id="main-standard">
     <p id="welcome-banner" class="identity hidden"></p>
-    <header>
-      <h1 id="greeting">Command Center</h1>
-      <p class="muted">Operator dashboard — business cash flow, Stability Fund, and stage gates. Not a paycheck budget app.</p>
-    </header>
+    <section class="instrument" id="instrument" aria-label="Wealth instrument">
+      <div class="instrument-copy">
+        <p class="kicker"><i class="led" id="mode-lamp"></i><span id="mode-word">Small tests only</span></p>
+        <p class="mode-why" id="mode-why">This label is your bet size. It stays put when you click a number.</p>
+        <p class="figure" id="hero-figure">0</p>
+        <p class="figure-sub" id="hero-sub">Pick a number below</p>
+        <div class="tick-row" id="tick-row"></div>
+        <article class="brief" id="hero-brief">
+          <h2 id="brief-title">What this number is</h2>
+          <p id="brief-what"></p>
+          <p id="brief-why"></p>
+          <ol id="brief-steps"></ol>
+          <button type="button" class="btn" id="brief-act">Next</button>
+        </article>
+      </div>
+      <svg class="dial" id="dial" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="dial-track" cx="100" cy="100" r="86" />
+        <circle class="dial-arc" id="dial-arc" cx="100" cy="100" r="86" />
+        <circle class="dial-track" cx="100" cy="100" r="68" />
+        <circle class="dial-arc dial-fund" id="dial-fund" cx="100" cy="100" r="68" />
+        <g class="orbit">
+          <circle class="led-dot" cx="100" cy="14" r="3.2" />
+        </g>
+      </svg>
+    </section>
+    <ol class="path" id="path">
+      <li><button type="button" data-go="pulse"><b>01</b> Route today's money <small>Every deposit gets a job</small></button></li>
+      <li><button type="button" data-go="moves"><b>02</b> Test one idea <small>You place it. We watch.</small></button></li>
+      <li><button type="button" data-go="desk"><b>03</b> Wait on wants <small>72 hours, then decide</small></button></li>
+    </ol>
+    <p class="lede">Protect the Stability Fund, then take capped bets. This desk never sends money.</p>
     <p id="error" class="error"></p>
 
-    <section class="card" id="reality-card">
+    <section class="card today-card keep span-2" id="today-card" data-deck="pulse">
+      <h2>Money came in <span class="today-date" id="today-date"></span></h2>
+      <p class="cue">Log each deposit the day it lands. Every dollar gets a job before you spend it.</p>
+      <form id="inflow-form" class="inflow-form">
+        <label>Amount ($) <input name="amount" type="number" min="1" step="0.01" required placeholder="1200" /></label>
+        <label>From <input name="source" placeholder="Flooring job, Smith kitchen" /></label>
+        <label>Type
+          <select name="kind">
+            <option value="business">Business income</option>
+            <option value="paycheck">Paycheck (taxes withheld)</option>
+            <option value="side">Side hustle / flip profit</option>
+            <option value="refund">Refund</option>
+            <option value="gift">Gift</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <button class="btn" type="submit">Route it</button>
+      </form>
+      <div class="month-strip" id="month-strip"></div>
+      <h3 class="routes-head" id="routes-head">Moves waiting on you</h3>
+      <ol class="routes" id="route-list"></ol>
+    </section>
+
+    <section class="lens" id="lens" hidden></section>
+
+    <section class="card toolbox-card keep span-2" id="toolbox-card" data-deck="pulse">
+      <h2>Your money toolbox</h2>
+      <p class="cue">Accounts that fit you now and what unlocks next. Limits checked on irs.gov and Bankrate <span id="toolbox-date"></span>.</p>
+      <div class="toolbox" id="toolbox-grid"></div>
+    </section>
+
+    <section class="card" id="reality-card" data-deck="pulse">
       <h2>Your Financial Reality <span id="data-badge"></span></h2>
+      <p class="cue">This month’s money. <button type="button" data-go="moves">Next: test one idea</button></p>
       <div id="reality-grid" class="alloc-grid"></div>
       <div id="reality-breakdowns" class="reality-breakdowns hidden"></div>
       <div id="reality-credit" class="reality-credit hidden"></div>
@@ -28,9 +113,10 @@
       </div>
     </section>
 
-    <section class="card memory-card" id="memory-section">
+    <section class="card memory-card" id="memory-section" data-deck="desk">
       <div class="memory-head">
         <h2>What I remember about you</h2>
+        <p class="cue">Saved facts. <a href="/static/advisor.html">Next: tell the advisor</a></p>
         <a href="/static/advisor.html" class="btn btn-secondary btn-sm">Ask Advisor</a>
       </div>
       <p class="muted small">Facts your advisor saves across sessions — goals, constraints, and context you shared in chat.</p>
@@ -41,22 +127,75 @@
       <ul id="memory-snapshots" class="memory-snapshots"></ul>
     </section>
 
-    <section class="card guide-card" id="start-guide">
+    <section class="card guide-card" id="start-guide" data-deck="pulse">
       <h2>Start here — your first week</h2>
+      <p class="cue">Do the unchecked step.</p>
       <p class="muted small">Wealth here means systems (15/65/20, Stability Fund, skill density)—not typing receipts. Dollar numbers on this screen come from your onboarding audit (demo bank data until you connect a real account).</p>
       <ol id="start-steps" class="guide-steps"></ol>
     </section>
 
-    <section class="card" id="quick-wins-section">
+    <section class="card star-card" id="omni-card" data-deck="pulse">
+      <div class="star-ring" id="star-ring" style="--pct: 0"><span id="star-pct">0%</span></div>
+      <div>
+      <h2>North Star</h2>
+      <p class="cue">How far to the target. Fill a blank, then save.</p>
+      <p class="muted small">Freedom target plus a simple assets-minus-debts picture. Incomplete is OK — fill what you know.</p>
+      <div id="north-star-grid" class="alloc-grid"></div>
+      <div id="net-worth-grid" class="alloc-grid"></div>
+      <p id="risk-budget-line" class="muted small"></p>
+      <form id="wealth-state-form" class="inline-form-grid">
+        <label>Cash / bank ($) <input name="cash" type="number" min="0" step="0.01" /></label>
+        <label>Business accounts ($) <input name="business_accounts" type="number" min="0" step="0.01" /></label>
+        <label>Tools / van / equipment ($) <input name="productive_assets" type="number" min="0" step="0.01" /></label>
+        <label>Investments ($) <input name="investments" type="number" min="0" step="0.01" /></label>
+        <button type="submit" class="btn btn-secondary btn-sm">Save net worth extras</button>
+      </form>
+      </div>
+    </section>
+
+    <section class="card span-2" id="smart-moves-card" data-deck="moves">
+      <h2>Smart Moves</h2>
+      <p class="cue">One question at a time. You still place the trade.</p>
+      <p class="muted small">Bull case + kill case. If it passes, you get a checklist. You place the trade yourself, then tap Commit so we watch the deadline.</p>
+      <form id="smart-move-form" class="inline-form-grid">
+        <label>What is the idea? <input name="name" required placeholder="30-day tool flip, Kalshi contract…" /></label>
+        <label>Type
+          <select name="move_type">
+            <option value="flip">Quick flip</option>
+            <option value="trade">Trade</option>
+            <option value="crypto">Crypto</option>
+            <option value="kalshi">Kalshi / prediction</option>
+            <option value="business_reinvest">Business reinvest</option>
+            <option value="equipment">Equipment</option>
+            <option value="acquisition">Acquisition</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Platform <input name="platform" placeholder="Kalshi, Coinbase, eBay…" /></label>
+        <label>Capital at risk ($) <input name="capital_required" type="number" min="0" step="0.01" required /></label>
+        <label>Expected profit ($) <input name="expected_profit" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Worst-case loss ($) <input name="max_loss" type="number" min="0" step="0.01" /></label>
+        <label>Days until money should be back <input name="recycle_days" type="number" min="1" value="14" /></label>
+        <label>Exit plan <input name="exit_plan" placeholder="Stop at −20%, sell by day 21…" /></label>
+        <button type="submit" class="btn">Underwrite this move</button>
+      </form>
+      <div id="smart-move-result" class="card inner hidden"></div>
+      <h3 class="form-sub">Open &amp; recent moves</h3>
+      <ul id="smart-move-list" class="missions"></ul>
+    </section>
+
+    <section class="card" id="quick-wins-section" data-deck="pulse">
       <h2>Quick wins this week</h2>
+      <p class="cue">Pick one. Do it before the week ends.</p>
       <ul id="quick-wins-list" class="missions"></ul>
       <h3 class="guide-sub">Opportunities</h3>
       <ul id="opportunities-list" class="missions"></ul>
       <p class="small muted disclaimer">Educational ideas — verify before deploying capital.</p>
     </section>
 
-    <section class="card focus-control">
-      <h2>Focus Season / Creation Hour</h2>
+    <section class="card focus-control" data-deck="desk">
+      <h2>Focus hour</h2>
+      <p class="cue">Turn solitude on only while you work.</p>
       <p class="muted small">Toggle Solitude Mode—minimal UI, mastery metrics only during your creation block.</p>
       <div class="focus-row">
         <label class="checkbox"><input type="checkbox" id="focus-toggle" /> Solitude Mode active</label>
@@ -66,35 +205,29 @@
       <p id="focus-msg" class="muted small"></p>
     </section>
 
-    <section class="card" id="fork-section">
+    <section class="card" id="fork-section" data-deck="desk">
       <h2>Fork Moments</h2>
-      <p class="muted small">Non-essential spend triggers a 72-hour pause. Acknowledge the emotion—choose architect, not reactor.</p>
+      <p class="cue">Name the want. Wait 72 hours.</p>
+      <p class="muted small">A cooling-off timer for “I want this” spending (not rent or bills). Name the feeling, wait 72 hours, then decide. Old test pauses can be dismissed.</p>
       <div id="active-pauses"></div>
+      <button type="button" id="clear-unlocked-pauses" class="btn btn-secondary btn-sm hidden">Clear finished pauses</button>
       <form id="fork-form" class="fork-form">
         <input name="item" placeholder="What are you about to buy?" required />
         <input name="amount" type="number" min="1" step="0.01" placeholder="Amount $" required />
-        <button type="submit" class="btn">Start Fork Moment</button>
+        <button type="submit" class="btn">Start 72-hour pause</button>
       </form>
-      <div id="emotion-panel" class="hidden card inner">
-        <p class="muted">What is driving this?</p>
-        <div class="emotion-btns">
-          <button type="button" data-emotion="stress">Stress</button>
-          <button type="button" data-emotion="boredom">Boredom</button>
-          <button type="button" data-emotion="status">Status</button>
-          <button type="button" data-emotion="social">Social</button>
-          <button type="button" data-emotion="comfort">Comfort</button>
-        </div>
-      </div>
     </section>
 
-    <section class="card">
-      <h2>Dollar Missions (15 / 65 / 20)</h2>
+    <section class="card" id="missions-card" data-deck="pulse">
+      <h2>Dollar Missions</h2>
+      <p class="cue">Split the next dollar 15 / 65 / 20.</p>
       <p id="gap-message" class="muted small"></p>
       <ul id="missions-list" class="missions"></ul>
     </section>
 
-    <section class="card">
+    <section class="card" id="stage-card" data-deck="pulse">
       <h2>Your Stage</h2>
+      <p class="cue">Where you are. The bar is the gap left.</p>
       <p class="stage-name" id="stage-name">—</p>
       <div class="progress-track"><div class="progress-fill" id="stage-progress"></div></div>
       <div id="esbi-panel" class="esbi-panel hidden">
@@ -116,6 +249,8 @@
     <p id="identity-line" class="identity"></p>
     <div id="recalibration" class="alert hidden"></div>
   </main>
+  </div>
+  </div>
 
   <main class="container hidden" id="main-solitude">
     <h1>Creation Hour</h1>
@@ -126,6 +261,7 @@
     </div>
     <p class="muted small">Noise suppressed. Exit Solitude Mode from Command Center when your hour ends.</p>
   </main>
-  <script type="module" src="/static/js/home.js"></script>
+  <script type="module" src="/static/js/home.js?v=omni5"></script>
+  <script src="/static/js/meridian.js?v=7"></script>
 </body>
 </html>

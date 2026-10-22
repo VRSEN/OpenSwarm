@@ -30,6 +30,11 @@ class ForkEmotionAck(BaseModel):
     choose_architect_path: bool = Field(default=True)
 
 
+class ForkRelease(BaseModel):
+    pause_id: int | None = None
+    release_all_unlocked: bool = False
+
+
 class FocusSeasonToggle(BaseModel):
     active: bool
     creation_hour: str = Field(default="07:00", pattern=r"^\d{2}:\d{2}$")

@@ -2,7 +2,7 @@
 
 ## Background
 
-The **Architect Blueprint** is a mechanical wealth machine built for **self-employed operators** — freelancers, solopreneurs, LLC owners, and side-hustlers with variable income. It is **not** a generic W-2 employee budget app.
+The **Architect Blueprint (OmniWealth)** is a mechanical wealth machine built for **self-employed operators** — freelancers, solopreneurs, LLC owners, and side-hustlers with variable income. It is **not** a generic W-2 employee budget app. It is the **one** system: Command Center UI + two-key underwriting for intelligent risks (flips, trades, crypto, Kalshi) with a hard cap on max loss.
 
 **Primary user (ICP):**
 - Gross **business revenue** is irregular; owner pay is intentional, not automatic withholding
@@ -78,7 +78,15 @@ Files save under `./mnt/<project_name>/` (documents, presentations, generated_im
 | **Asset Acquisition** | Scalable IP + cash-flowing instruments | ≥ 1 asset with positive spread |
 | **Sovereignty** | Freedom regardless of market volatility | Passive yield covers 100% essentials; Step-Up Basis documented |
 
-**No stage skipping.** Friction-Based UX hides locked modules entirely (intentional invisibility).
+**No stage skipping for lifestyle upgrades.** Smart bets are allowed **inside the risk budget** at every stage (seed TESTs when the fund is thin). Stability Fund, tax, and rent are never the source of a bet.
+
+## Two-Key Smart Moves
+
+1. **Opportunity Scanner** builds the bull case (`UnderwriteSmartMove`).
+2. **Risk Officer** tries to kill it (`BuildKillCase`).
+3. **Capital Allocator** sizes the dollar from surplus pools only.
+4. The user **executes the playbook** on Kalshi, a broker, eBay, etc. The swarm does **not** send money or place orders.
+5. Log the move as **Commit** so the weekly review can watch the recycle date.
 
 ## 15/65/20 Principle (Cash Flow Engineer)
 

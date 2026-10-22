@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.fork_moment import ForkMomentPause
 from backend.models.user_profile import UserProfile
-from backend.schemas.interactions import ForkEmotionAck, ForkPauseStart
+from backend.schemas.interactions import ForkEmotionAck, ForkPauseStart, ForkRelease
 from backend.services.fork_moments import acknowledge_emotion, create_fork_pause, dollar_missions
 
 router = APIRouter(prefix="/mirror", tags=["mirror"])
@@ -36,20 +36,25 @@ def list_fork_moments(user_id: str = Query(default="default"), db: Session = Dep
         .all()
     )
     now = datetime.now(timezone.utc)
-    return {
-        "active_pauses": [
+    pauses = []
+    for r in rows:
+        unlock = r.unlock_at
+        if unlock.tzinfo is None:
+            unlock = unlock.replace(tzinfo=timezone.utc)
+        hours = max(0, (unlock - now).total_seconds() / 3600)
+        pauses.append(
             {
                 "id": r.id,
                 "item": r.item_description,
                 "amount": r.amount,
                 "emotion_acknowledged": r.emotion_acknowledged,
-                "unlock_at": r.unlock_at.isoformat(),
-                "hours_remaining": max(0, (r.unlock_at.replace(tzinfo=timezone.utc) - now).total_seconds() / 3600),
+                "unlock_at": unlock.isoformat(),
+                "hours_remaining": hours,
+                "unlocked": hours <= 0,
                 "identity_notification": r.identity_notification,
             }
-            for r in rows
-        ]
-    }
+        )
+    return {"active_pauses": pauses}
 
 
 @router.post("/fork-moments/pause")
@@ -94,3 +99,38 @@ def ack_fork_emotion(
     row.identity_notification = result["identity_notification"]
     db.commit()
     return result
+
+
+@router.post("/fork-moments/release")
+def release_fork_moment(
+    body: ForkRelease,
+    user_id: str = Query(default="default"),
+    db: Session = Depends(get_db),
+):
+    """Close a pause (or all unlocked ones) so they leave Command Center."""
+    now = datetime.now(timezone.utc)
+    q = db.query(ForkMomentPause).filter(
+        ForkMomentPause.user_id == user_id,
+        ForkMomentPause.released.is_(False),
+    )
+    if body.release_all_unlocked:
+        rows = q.all()
+        closed = 0
+        for row in rows:
+            unlock = row.unlock_at
+            if unlock.tzinfo is None:
+                unlock = unlock.replace(tzinfo=timezone.utc)
+            if unlock <= now:
+                row.released = True
+                closed += 1
+        db.commit()
+        return {"released": closed, "message": f"Cleared {closed} finished pause(s)."}
+
+    if not body.pause_id:
+        raise HTTPException(status_code=400, detail="pause_id required")
+    row = db.get(ForkMomentPause, body.pause_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Fork Moment not found")
+    row.released = True
+    db.commit()
+    return {"released": 1, "message": "Pause closed."}

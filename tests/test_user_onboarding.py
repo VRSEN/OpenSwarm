@@ -47,6 +47,15 @@ def test_full_intake_replaces_demo_flow(client):
     )
     assert pause.status_code == 200
     assert pause.json()["status"] == "paused"
+    pause_id = pause.json()["pause_id"]
+    ack = client.post(
+        "/mirror/fork-moments/acknowledge",
+        json={"pause_id": pause_id, "emotion": "stress", "choose_architect_path": True},
+    )
+    assert ack.status_code == 200
+    gone = client.post("/mirror/fork-moments/release", json={"pause_id": pause_id})
+    assert gone.status_code == 200
+    assert gone.json()["released"] == 1
 
 
 def test_clinical_audit_optional_footprints(client):

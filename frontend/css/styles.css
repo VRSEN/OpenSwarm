@@ -314,6 +314,9 @@ body.solitude-mode { background: #0a0e12; }
 .credit-flags li { color: #f1c40f; padding: 0.25rem 0; }
 .credit-actions li { color: var(--accent); padding: 0.25rem 0; }
 .reality-credit h4 { font-size: 0.85rem; margin: 0.5rem 0 0.25rem; color: var(--muted); }
+.verdict-go { color: var(--success); font-weight: 700; }
+.verdict-wait { color: #f1c40f; font-weight: 700; }
+.verdict-stop { color: #e74c3c; font-weight: 700; }
 .playbook-card-head h3 { margin: 0.25rem 0 0.5rem; font-size: 1rem; }
 .playbook-cat { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .playbook-app { color: var(--accent); margin-top: 0.5rem; margin-bottom: 0; }
@@ -373,3 +376,73 @@ body.solitude-mode { background: #0a0e12; }
 }
 .artifact-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.25rem; }
 .artifact-actions .btn { font-size: 0.7rem; padding: 0.2rem 0.45rem; }
+
+/* OmniWealth command desk. Refero lock: Hyperliquid/Sandclock mint-on-black + Monarch dashboard structure. */
+body.command {
+  --bg: #050806;
+  --surface: rgba(12, 22, 18, 0.78);
+  --text: #f4f7f4;
+  --muted: #8ea397;
+  --accent: #3dff9a;
+  --success: #3dff9a;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  background:
+    radial-gradient(900px 480px at 80% -10%, rgba(61, 255, 154, 0.12), transparent 60%),
+    linear-gradient(180deg, #07110d 0%, #050806 40%);
+  min-height: 100vh;
+}
+body.command::before {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; opacity: 0.35;
+  background-image:
+    linear-gradient(rgba(61, 255, 154, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 255, 154, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 30% 0%, #000 20%, transparent 75%);
+}
+.command-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; position: relative; }
+.command-rail {
+  position: sticky; top: 0; height: 100vh; padding: 1.25rem 1rem;
+  border-right: 1px solid rgba(61, 255, 154, 0.18);
+  background: rgba(5, 10, 8, 0.72); backdrop-filter: blur(10px);
+  display: flex; flex-direction: column; gap: 1.25rem;
+}
+.command-mark { font-family: "Instrument Serif", serif; font-size: 2rem; letter-spacing: -0.03em; line-height: 1; }
+.command-mark span { display: block; font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; letter-spacing: 0.22em; color: var(--accent); text-transform: uppercase; margin-top: 0.35rem; }
+body.command .nav { flex-direction: column; gap: 0.35rem; padding: 0; background: transparent; border: 0; }
+body.command .nav a { padding: 0.45rem 0.6rem; border-radius: 999px; font-size: 0.85rem; }
+body.command .nav a.active { background: var(--accent); color: #04140c; }
+.rail-note { margin-top: auto; font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; color: var(--muted); line-height: 1.45; }
+.command-stage { padding: 1.25rem 1.5rem 3rem; }
+.command-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
+.eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.25rem; }
+body.command h1 { font-family: "Instrument Serif", serif; font-size: 3.4rem; font-weight: 400; margin: 0; letter-spacing: -0.03em; }
+.lede { grid-column: 1 / -1; margin: 0; color: var(--muted); max-width: 42rem; }
+body.command .container.command-grid { max-width: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1.4fr 1fr; gap: 0.9rem; align-items: start; }
+body.command .card {
+  background: var(--surface); border: 1px solid rgba(61, 255, 154, 0.16);
+  border-radius: 18px; box-shadow: none; backdrop-filter: blur(8px);
+}
+body.command h2 { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+body.command #reality-card, body.command #smart-moves-card { grid-column: 1 / -1; }
+.deck-switch { display: flex; gap: 0.35rem; padding: 0.25rem; border: 1px solid rgba(61, 255, 154, 0.25); border-radius: 999px; }
+.deck-btn { background: transparent; color: var(--muted); border: 0; border-radius: 999px; padding: 0.45rem 0.9rem; cursor: pointer; font-family: inherit; }
+.deck-btn.active { background: var(--accent); color: #04140c; }
+.deck-hidden { display: none !important; }
+.star-card { display: grid; grid-template-columns: 140px 1fr; gap: 1rem; align-items: center; }
+.star-ring {
+  width: 128px; height: 128px; border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), rgba(61, 255, 154, 0.12) 0);
+  display: grid; place-items: center; position: relative;
+}
+.star-ring::after { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: #07110d; }
+.star-ring span { position: relative; z-index: 1; font-family: "Instrument Serif", serif; font-size: 1.8rem; }
+body.command .btn { border-radius: 999px; background: var(--accent); color: #04140c; border: 0; }
+body.command .btn-secondary { background: transparent; color: var(--text); border: 1px solid rgba(61, 255, 154, 0.4); }
+@media (max-width: 900px) {
+  .command-shell { grid-template-columns: 1fr; }
+  .command-rail { position: relative; height: auto; }
+  body.command .nav { flex-direction: row; flex-wrap: wrap; }
+  body.command .container.command-grid, .star-card { grid-template-columns: 1fr; }
+  body.command h1 { font-size: 2.4rem; }
+}

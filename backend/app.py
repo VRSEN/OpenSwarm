@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import get_db, init_db
-from backend.routers import dashboard, intake, memory, mirror_interactions, reputation, studio, user
+from backend.routers import dashboard, intake, memory, mirror_interactions, omni, reputation, studio, user
 from backend.seed import seed_unlocks
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -29,6 +29,7 @@ def register_mechanical_routes(app: FastAPI) -> None:
     app.include_router(intake.router)
     app.include_router(mirror_interactions.router)
     app.include_router(studio.router)
+    app.include_router(omni.router)
 
     from backend.services.literacy_content import get_modules
 
