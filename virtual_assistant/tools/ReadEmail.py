@@ -46,7 +46,7 @@ class ReadEmail(BaseTool):
     """
     Reads the full content of a specific email by its message ID.
     
-    Use this after CheckUnreadEmails to fetch the complete email content
+    Use this after FindEmails to fetch the complete email content
     when you need to read the full message body.
     """
     
@@ -57,7 +57,7 @@ class ReadEmail(BaseTool):
     
     message_id: str = Field(
         ...,
-        description="The message ID to fetch (obtained from CheckUnreadEmails)"
+        description="The message ID to fetch (obtained from FindEmails)"
     )
     
     body_format: Literal["text", "html"] = Field(
@@ -190,9 +190,9 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    # Get a message ID from CheckUnreadEmails
-    from virtual_assistant.tools.CheckUnreadEmails import CheckUnreadEmails
-    check_tool = CheckUnreadEmails(provider="gmail", limit=1)
+    # Get a message ID from FindEmails
+    from virtual_assistant.tools.FindEmails import FindEmails
+    check_tool = FindEmails(provider="gmail", query="is:unread", limit=1)
     result = check_tool.run()
     
     import json
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     # Test 3: Read an Outlook message
     print("Test 3: Outlook - Plain text")
     print("-" * 60)
-    check_tool = CheckUnreadEmails(provider="outlook", limit=1)
+    check_tool = FindEmails(provider="outlook", is_read=False, limit=1)
     result = check_tool.run()
     try:
         data = json.loads(result)

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__PROJECT_NAME__</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; font-family: system-ui, -apple-system, sans-serif; color: #e2e8f0; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 11px 32px; background: #1e293b;
+    border-bottom: 1px solid #334155; position: sticky; top: 0; z-index: 20;
+  }
+  .back {
+    color: #64748b; text-decoration: none; font-size: 12px;
+    padding: 3px 10px; border: 1px solid #334155; border-radius: 5px;
+    transition: color .2s, border-color .2s; white-space: nowrap;
+  }
+  .back:hover { color: #94a3b8; border-color: #475569; }
+  .project-title { font-size: 14px; font-weight: 600; color: #f1f5f9; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+  .dot.live { background: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,.25); }
+
+  .content { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* Each slide: caption + seamless iframe, no box */
+  .slide-item { margin-bottom: 48px; }
+
+  .slide-caption {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-size: 11px; color: #475569;
+  }
+  .slide-badge {
+    padding: 1px 8px; border-radius: 4px;
+    background: #1e293b; font-size: 10px; color: #475569;
+    font-variant-numeric: tabular-nums;
+  }
+  @keyframes ellipsis { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+  .gen-text { color: #818cf8; font-style: italic; }
+  .gen-text::after { content: '.'; animation: ellipsis 1.2s steps(1) infinite; }
+
+  /* Seamless iframe wrapper — zoom scales both visual output and layout size */
+  .iframe-wrap {
+    width: 100%; position: relative;
+    cursor: pointer; border-radius: 6px;
+    outline: 2px solid transparent; outline-offset: 2px;
+    transition: outline-color .25s;
+  }
+  .iframe-wrap:hover { outline-color: #6366f1; }
+  @keyframes gen-glow {
+    0%,100% { outline-color: #6366f1; box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
+    50%      { outline-color: #818cf8; box-shadow: 0 0 0 7px rgba(99,102,241,0); }
+  }
+  .iframe-wrap.streaming { animation: gen-glow 1.4s ease-in-out infinite; }
+  @keyframes done-flash { 0%,100%{outline-color:#10b981} 50%{outline-color:#34d399} }
+  .iframe-wrap.updated { animation: done-flash .55s ease 2; }
+
+  /* iframe: fixed at slide canvas size; JS sets zoom so layout shrinks proportionally */
+  .iframe-wrap iframe {
+    width: 1280px; height: 720px;
+    border: none; display: block; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="back" href="/">&#8592; All projects</a>
+  <span class="project-title">__PROJECT_NAME__</span>
+  <span class="dot" id="dot"></span>
+</div>
+<div class="content" id="content"></div>
+<script>
+const PROJECT = "__PROJECT_NAME__";
+const SLIDE_W = 1280, SLIDE_H = 720;
+const content = document.getElementById('content');
+const dot     = document.getElementById('dot');
+const items   = {};
+
+function slideNum(p) { const m = p.split('/').pop().match(/slide_0*(\d+)/i); return m ? parseInt(m[1], 10) : 999; }
+
+function updateSlideContent(iframe, html) {
+  try {
+    const doc = iframe.contentDocument;
+    if (!doc || !doc.body) {
+      // Ensure zoom is set before the iframe renders the new content,
+      // otherwise it briefly renders at full 1280px and appears cropped.
+      const wrap = iframe.parentElement;
+      if (wrap) applyScale(wrap);
+      iframe.srcdoc = html;
+      return;
+    }
+    const nd = new DOMParser().parseFromString(html, 'text/html');
+    doc.head.innerHTML = nd.head.innerHTML;
+    doc.body.innerHTML = nd.body.innerHTML;
+    [...doc.body.attributes].forEach(a => doc.body.removeAttribute(a.name));
+    [...nd.body.attributes].forEach(a => doc.body.setAttribute(a.name, a.value));
+  } catch (_) { iframe.srcdoc = html; }
+}
+
+// zoom scales both visual output and layout box — no overflow, no height math needed
+function applyScale(wrap) {
+  const iframe = wrap.querySelector('iframe');
+  if (!iframe) return;
+  const w = wrap.clientWidth || wrap.offsetWidth;
+  if (!w) return;
+  iframe.style.zoom = String(w / SLIDE_W);
+}
+
+const ro = new ResizeObserver(entries => {
+  for (const e of entries) applyScale(e.target);
+});
+
+function ensureItem(relPath, name) {
+  if (items[relPath]) return items[relPath];
+
+  const num   = String(slideNum(relPath)).padStart(2, '0');
+  const dname = name || relPath.split('/').pop();
+
+  const item = document.createElement('div');
+  item.className   = 'slide-item';
+  item.dataset.key = relPath;
+  item.innerHTML   =
+    '<div class="slide-caption">' +
+      '<span class="slide-badge">' + num + '</span>' +
+      '<span class="slide-name">' + dname + '</span>' +
+    '</div>' +
+    '<div class="iframe-wrap"><iframe></iframe></div>';
+
+  const wrap = item.querySelector('.iframe-wrap');
+  wrap.addEventListener('click', () => window.open('/view/' + relPath, '_blank'));
+  ro.observe(wrap);
+
+  const n       = slideNum(relPath);
+  const sibling = [...content.children].find(c => slideNum(c.dataset.key) > n);
+  content.insertBefore(item, sibling || null);
+
+  // Apply scale after insertion so clientWidth is known
+  requestAnimationFrame(() => applyScale(wrap));
+
+  const entry = {
+    item,
+    wrap,
+    labelEl:   item.querySelector('.slide-name'),
+    iframe:    item.querySelector('iframe'),
+    pollTimer: null,
+  };
+  items[relPath] = entry;
+  return entry;
+}
+
+function reloadFromFile(relPath) {
+  const e = items[relPath]; if (!e) return;
+  e.iframe.removeAttribute('srcdoc');
+  e.iframe.src = '/files/' + relPath + '?t=' + Date.now();
+}
+
+async function startPolling(relPath, name) {
+  const e = ensureItem(relPath, name);
+  if (e.pollTimer) return;
+
+  e.wrap.classList.add('streaming');
+  e.labelEl.innerHTML = '<span class="gen-text">Generating</span>';
+  e.item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const poll = async () => {
+    try {
+      const r = await fetch('/api/buffer/' + relPath + '?t=' + Date.now());
+      if (!e.pollTimer) return;                        // stopped while fetch was in flight
+      if (r.status === 204) { stopPolling(relPath, name); return; }
+      const html = await r.text();
+      if (!e.pollTimer) return;                        // stopped while body was reading
+      if (html) updateSlideContent(e.iframe, html);
+    } catch (_) {}
+  };
+
+  await poll();
+  e.pollTimer = setInterval(poll, 800);
+}
+
+function stopPolling(relPath, name) {
+  const e = items[relPath]; if (!e) return;
+  const wasPolling = !!e.pollTimer;
+  if (e.pollTimer) { clearInterval(e.pollTimer); e.pollTimer = null; }
+  e.wrap.classList.remove('streaming');
+  e.labelEl.textContent = name || relPath.split('/').pop();
+  if (wasPolling) {
+    reloadFromFile(relPath);
+    e.wrap.classList.remove('updated'); void e.wrap.offsetWidth;
+    e.wrap.classList.add('updated'); setTimeout(() => e.wrap.classList.remove('updated'), 1400);
+  }
+}
+
+async function loadInitial() {
+  try {
+    const res  = await fetch('/api/slides');
+    const all  = await res.json();
+    const mine = all.filter(s => s.rel_path.startsWith(PROJECT + '/'));
+    for (const s of mine) {
+      ensureItem(s.rel_path, s.name);
+      const buf = await fetch('/api/buffer/' + s.rel_path);
+      if (buf.ok && buf.status !== 204) startPolling(s.rel_path, s.name);
+      else reloadFromFile(s.rel_path);
+    }
+  } catch (_) {}
+}
+
+const es = new EventSource('/api/events');
+es.onopen  = () => { dot.className = 'dot live'; };
+es.onerror = () => { dot.className = 'dot'; };
+es.onmessage = ev => {
+  const d = JSON.parse(ev.data);
+  const mine = d.rel_path && d.rel_path.startsWith(PROJECT + '/');
+  if      (d.type === 'connected')              loadInitial();
+  else if (mine && d.type === 'slide_delta')    startPolling(d.rel_path, d.name);
+  else if (mine && d.type === 'slide_complete') stopPolling(d.rel_path, d.name);
+  else if (mine && d.type === 'slide_changed')  { ensureItem(d.rel_path, d.name); reloadFromFile(d.rel_path); }
+};
+</script>
+</body>
+</html>

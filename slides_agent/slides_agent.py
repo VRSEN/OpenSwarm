@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from openai.types.shared import Reasoning
 from pathlib import Path
 from virtual_assistant.tools.ReadFile import ReadFile
-from shared_tools.CopyFile import CopyFile
+from shared_tools import CopyFile
 
 from config import get_default_model, is_openai_provider
 
@@ -55,8 +55,6 @@ def create_slides_agent() -> Agent:
         name="Slides Agent",
         description="PowerPoint presentation specialist for creating, editing, and analyzing .pptx files",
         instructions=_build_instructions(),
-        # files_folder=os.path.join(current_dir, "files"),
-        # tools_folder=os.path.join(current_dir, "tools"),
         tools=[
             # Slide creation and management: InsertNewSlides then ModifySlide
             InsertNewSlides,
@@ -105,4 +103,5 @@ def create_slides_agent() -> Agent:
 
 if __name__ == "__main__":
     from agency_swarm import Agency
+
     Agency(create_slides_agent()).terminal_demo(reload=False)

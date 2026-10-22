@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Slide Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f172a; overflow: hidden; }
+  .bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 14px; background: rgba(15,23,42,.92); backdrop-filter: blur(4px);
+    font-family: system-ui, sans-serif; font-size: 11px; color: #94a3b8;
+    border-bottom: 1px solid #1e293b;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+  @keyframes gen-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .dot.generating { background: #6366f1; animation: gen-pulse 1s ease-in-out infinite; }
+  .dot.done { background: #10b981; }
+  .stage {
+    position: fixed; top: 27px; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  iframe { width: 1280px; height: 720px; border: none; display: block; background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar"><span class="dot" id="dot"></span><span id="status">Loading...</span></div>
+<div class="stage"><iframe id="frame"></iframe></div>
+<script>
+const REL_PATH  = "__REL_PATH__";
+const SLIDE_W   = 1280, SLIDE_H = 720;
+const frame     = document.getElementById('frame');
+const dot       = document.getElementById('dot');
+const statusEl  = document.getElementById('status');
+let pollTimer   = null;
+
+function applyScale() {
+  const vw = window.innerWidth, vh = window.innerHeight - 27;
+  const scale = Math.min(vw / SLIDE_W, vh / SLIDE_H);
+  frame.style.zoom = String(scale);
+}
+window.addEventListener('resize', applyScale);
+applyScale();
+
+function setStatus(cls, text) { dot.className = 'dot ' + cls; statusEl.textContent = text; }
+
+function updateFrame(html) {
+  try {
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) { frame.srcdoc = html; return; }
+    const nd = new DOMParser().parseFromString(html, 'text/html');
+    doc.head.innerHTML = nd.head.innerHTML;
+    doc.body.innerHTML = nd.body.innerHTML;
+    [...doc.body.attributes].forEach(a => doc.body.removeAttribute(a.name));
+    [...nd.body.attributes].forEach(a => doc.body.setAttribute(a.name, a.value));
+  } catch (_) { frame.srcdoc = html; }
+}
+
+function stopPollingAndLoadFile() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  setStatus('done', 'Done');
+  frame.removeAttribute('srcdoc');
+  frame.src = '/files/' + REL_PATH + '?t=' + Date.now();
+}
+
+async function pollBuffer() {
+  try {
+    const res = await fetch('/api/buffer/' + REL_PATH + '?t=' + Date.now());
+    if (res.status === 204) { stopPollingAndLoadFile(); return; }
+    const html = await res.text();
+    if (html) updateFrame(html);
+  } catch (_) {}
+}
+
+async function init() {
+  const res = await fetch('/api/buffer/' + REL_PATH);
+  if (res.status === 204 || !res.ok) {
+    stopPollingAndLoadFile();
+  } else {
+    const html = await res.text();
+    if (html) frame.srcdoc = html;
+    setStatus('generating', 'Generating...');
+    if (!pollTimer) pollTimer = setInterval(pollBuffer, 150);
+  }
+}
+
+const es = new EventSource('/api/events');
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type === 'connected') {
+    init();
+  } else if (d.type === 'slide_delta' && d.rel_path === REL_PATH) {
+    if (!pollTimer) { setStatus('generating', 'Generating...'); pollTimer = setInterval(pollBuffer, 150); }
+  } else if (d.type === 'slide_complete' && d.rel_path === REL_PATH) {
+    stopPollingAndLoadFile();
+  }
+};
+</script>
+</body>
+</html>

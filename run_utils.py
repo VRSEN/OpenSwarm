@@ -1,12 +1,15 @@
 import json
 import os
+import re
 import sys
 import site
 import subprocess
 import shutil
-import tempfile
 import platform as platform_module
 from pathlib import Path
+
+_GITHUB_OWNER_PATTERN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+_GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,100}")
 
 
 def _openswarm_state_root() -> Path:
@@ -33,41 +36,39 @@ def _openswarm_product_roots() -> list[Path]:
 
 
 def _product_env_from_config() -> dict[str, str]:
-    config = package = fallback = None
+    config = config_package = fallback = fallback_package = None
     for root in _product_root_candidates():
         candidate_config = root / "openswarm.config.mjs"
         candidate_fallback = root / "openswarm.product-env.json"
         candidate_package = root / "package.json"
         if not fallback and candidate_fallback.exists() and candidate_package.exists():
             fallback = candidate_fallback
-            package = candidate_package
+            fallback_package = candidate_package
         if candidate_config.exists() and candidate_package.exists():
             config = candidate_config
-            package = candidate_package
+            config_package = candidate_package
             break
     node = shutil.which("node")
-    if node and config and package:
-        return _product_env_from_mjs(node, config, package)
-    if fallback and package:
-        return _product_env_from_json(fallback, package)
-    if not node and config and package:
+    if node and config and config_package:
+        return _product_env_from_mjs(node, config)
+    if fallback and fallback_package:
+        return _product_env_from_json(fallback, fallback_package)
+    if not node and config and config_package:
         raise RuntimeError("OpenSwarm product config requires Node.js or openswarm.product-env.json. Reinstall OpenSwarm through npm or npx.")
     if not config and not fallback:
         raise RuntimeError("OpenSwarm product config files are missing. Reinstall OpenSwarm through npm or npx.")
     raise RuntimeError("OpenSwarm package metadata is missing. Reinstall OpenSwarm through npm or npx.")
 
 
-def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, str]:
+def _product_env_from_mjs(node: str, config: Path) -> dict[str, str]:
     script = (
-        "const fs=require('fs');"
         "const {pathToFileURL}=require('url');"
         "import(pathToFileURL(process.argv[1]).href).then((cfg)=>{"
-        "const pkg=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));"
-        "process.stdout.write(JSON.stringify(cfg.getProductEnv({stateRoot:process.argv[2],version:pkg.version})));"
+        "process.stdout.write(JSON.stringify(cfg.getProductEnv({stateRoot:process.argv[2]})));"
         "}).catch((err)=>{console.error(err&&err.stack||err);process.exit(1);});"
     )
     result = subprocess.run(
-        [node, "-e", script, str(config), str(_openswarm_state_root()), str(package)],
+        [node, "-e", script, str(config), str(_openswarm_state_root())],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
@@ -82,23 +83,115 @@ def _product_env_from_mjs(node: str, config: Path, package: Path) -> dict[str, s
 def _product_env_from_json(fallback: Path, package: Path) -> dict[str, str]:
     try:
         values = json.loads(fallback.read_text(encoding="utf-8"))
-        pkg = json.loads(package.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"OpenSwarm product config fallback failed to load: {exc}") from exc
-    if not isinstance(values, dict) or not isinstance(pkg, dict) or not pkg.get("version"):
+    try:
+        package_values = json.loads(package.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenSwarm package metadata failed to load: {exc}") from exc
+    if not isinstance(values, dict):
         raise RuntimeError("OpenSwarm product config fallback is invalid. Reinstall OpenSwarm through npm or npx.")
+    if not isinstance(package_values, dict) or not package_values.get("version"):
+        raise RuntimeError("OpenSwarm package metadata is invalid. Reinstall OpenSwarm through npm or npx.")
     env = {key: str(value) for key, value in values.items()}
+    marketplace_env = _marketplace_env_from_json(fallback.parent, Path.cwd())
+    if marketplace_env:
+        for key in (
+            "AGENTSWARM_MARKETPLACE_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN",
+        ):
+            env.pop(key, None)
+        env.update(marketplace_env)
     env["AGENTSWARM_PRODUCT_STATE_ROOT"] = str(_openswarm_state_root())
-    env["AGENTSWARM_PRODUCT_VERSION"] = str(pkg["version"])
+    env["AGENTSWARM_PRODUCT_VERSION"] = str(package_values["version"])
     return env
 
 
+def _marketplace_env_from_json(root: Path, project: Path | None = None) -> dict[str, str]:
+    paths = []
+    if project:
+        paths.append(project / "openswarm.marketplace.json")
+    paths.append(root / "openswarm.marketplace.json")
+    path = next((item for item in dict.fromkeys(paths) if item.exists()), None)
+    if path is None:
+        return {}
+    try:
+        values = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"OpenSwarm marketplace metadata failed to load: {exc}") from exc
+    if not isinstance(values, dict):
+        raise RuntimeError("OpenSwarm marketplace metadata must be a JSON object.")
+
+    return _marketplace_env_from_values(values)
+
+
+def _marketplace_env_from_values(values: dict[str, object]) -> dict[str, str]:
+    swarm_id = _marketplace_repo(values, "swarmId")
+    parent_swarm_id = _marketplace_repo(values, "parentSwarmId", required=False)
+    swarm_origin = _metadata_string(values, "swarmOrigin")
+    if swarm_origin not in {"original", "fork", "unknown"}:
+        raise RuntimeError("OpenSwarm marketplace metadata swarmOrigin must be original, fork, or unknown.")
+    if swarm_origin == "fork" and parent_swarm_id is None:
+        raise RuntimeError("OpenSwarm marketplace metadata parentSwarmId is required for fork swarms.")
+
+    env = {
+        "AGENTSWARM_MARKETPLACE_SWARM_ID": swarm_id,
+        "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN": swarm_origin,
+    }
+    if parent_swarm_id:
+        env["AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID"] = parent_swarm_id
+    else:
+        env.pop("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID", None)
+    return env
+
+
+def _metadata_string(values: dict[str, object], key: str, *, required: bool = True) -> str | None:
+    value = values.get(key)
+    if (value is None or value == "") and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a non-empty string.")
+    return value.strip()
+
+
+def _marketplace_repo(values: dict[str, object], key: str, *, required: bool = True) -> str | None:
+    repo = _metadata_string(values, key, required=required)
+    if repo is None:
+        return None
+    parts = repo.split("/")
+    if len(parts) != 2:
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
+    owner, name = parts
+    if name.lower().endswith(".git"):
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
+    if not _GITHUB_OWNER_PATTERN.fullmatch(owner) or "--" in owner or not _GITHUB_REPOSITORY_NAME_PATTERN.fullmatch(name):
+        raise RuntimeError(f"OpenSwarm marketplace metadata {key} must be a GitHub owner/repo.")
+    return repo
+
+
+def _disables_telemetry(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in {"0", "false", "off", "no"}
+
+
 def _configure_product_env() -> None:
-    for key, value in _product_env_from_config().items():
-        if key == "AGENTSWARM_PRODUCT_STATE_ROOT":
+    product_env = _product_env_from_config()
+    for key, value in product_env.items():
+        if key in {
+            "AGENTSWARM_PRODUCT_STATE_ROOT",
+            "AGENTSWARM_PRODUCT_VERSION",
+            "AGENTSWARM_MARKETPLACE_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID",
+            "AGENTSWARM_MARKETPLACE_SWARM_ORIGIN",
+        }:
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
+    if "AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID" not in product_env:
+        os.environ.pop("AGENTSWARM_MARKETPLACE_PARENT_SWARM_ID", None)
+    if _disables_telemetry(os.environ.get("ENABLE_TELEMETRY")):
+        os.environ["OPEN_SWARM_TELEMETRY"] = "0"
+        os.environ["AGENTSWARM_TELEMETRY"] = "0"
 
 
 def _openswarm_package_names(platform: str, arch: str, *, musl: bool, baseline: bool) -> list[str]:
@@ -560,53 +653,36 @@ def main() -> None:
 
     from swarm import create_agency
 
-    onboard_flag = Path(tempfile.gettempdir()) / "_openswarm_onboard.flag"
-    os.environ["OPENSWARM_ONBOARD_FLAG"] = str(onboard_flag)
-    onboard_flag.unlink(missing_ok=True)
+    import logging
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
+    logging.disable(logging.NOTSET)
+    print("\nStarting OpenSwarm… this may take a few seconds.")
+    _configure_demo_console()
 
-    while True:
-        import logging
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
-        logging.disable(logging.NOTSET)
-        print("\nStarting OpenSwarm… this may take a few seconds.")
-        _configure_demo_console()
+    # Suppress OS-level stderr (fd 2) to prevent GLib/GIO UWP-app
+    # warnings from appearing in the terminal during startup and TUI.
+    _saved_stderr_fd = None
+    try:
+        _saved_stderr_fd = os.dup(2)
+        _dn = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(_dn, 2)
+        os.close(_dn)
+    except OSError:
+        pass
 
-        # Suppress OS-level stderr (fd 2) to prevent GLib/GIO UWP-app
-        # warnings from appearing in the terminal during startup and TUI.
-        _saved_stderr_fd = None
+    print(build_integration_summary())
+    print()
+
+    agency = create_agency()
+    agency.tui(show_reasoning=True, reload=False)
+
+    if _saved_stderr_fd is not None:
         try:
-            _saved_stderr_fd = os.dup(2)
-            _dn = os.open(os.devnull, os.O_WRONLY)
-            os.dup2(_dn, 2)
-            os.close(_dn)
+            os.dup2(_saved_stderr_fd, 2)
+            os.close(_saved_stderr_fd)
         except OSError:
             pass
-
-        print(build_integration_summary())
-        print()
-
-        agency = create_agency()
-        agency.tui(show_reasoning=True, reload=False)
-
-        if _saved_stderr_fd is not None:
-            try:
-                os.dup2(_saved_stderr_fd, 2)
-                os.close(_saved_stderr_fd)
-            except OSError:
-                pass
-
-        if onboard_flag.exists():
-            onboard_flag.unlink(missing_ok=True)
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
-            logging.disable(logging.NOTSET)
-            print("\nLaunching setup wizard…")
-            from onboard import run_onboarding
-            run_onboarding()
-            _load_openswarm_dotenv(override=True)
-        else:
-            break
 
 
 if __name__ == "__main__":

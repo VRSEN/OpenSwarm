@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slides Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; font-family: system-ui, -apple-system, sans-serif; color: #e2e8f0; }
+
+  /* ── Header ── */
+  .topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 24px; background: #1e293b;
+    border-bottom: 1px solid #334155; position: sticky; top: 0; z-index: 20;
+  }
+  .topbar h1 { font-size: 14px; font-weight: 600; letter-spacing: .05em; color: #f1f5f9; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+  .dot.live { background: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,.25); }
+  #status-text { font-size: 11px; color: #64748b; }
+
+  /* ── Empty state ── */
+  .empty {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px;
+    height: calc(100vh - 49px); color: #475569; text-align: center;
+  }
+  .empty p { font-size: 13px; line-height: 1.7; max-width: 300px; color: #64748b; }
+
+  /* ── Project sections ── */
+  #container { padding: 24px; display: none; }
+
+  .project-section { margin-bottom: 32px; }
+
+  a.project-header {
+    display: inline-flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    padding: 7px 12px; margin-left: -12px;
+    border-radius: 7px; text-decoration: none;
+    border: 1px solid #334155; transition: background .18s, border-color .18s;
+  }
+  a.project-header:hover { background: #1e293b; border-color: #475569; }
+  .project-name {
+    font-size: 13px; font-weight: 600; color: #94a3b8;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  a.project-header:hover .project-name { color: #cbd5e1; }
+  .slide-count { font-size: 11px; color: #475569; }
+  .project-arrow { font-size: 12px; color: #6366f1; }
+
+  .slides-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+
+  /* ── Slide card ── */
+  .card {
+    background: #1e293b; border-radius: 8px; overflow: hidden;
+    border: 2px solid #334155; transition: border-color .25s;
+    cursor: pointer; user-select: none;
+  }
+  .card:hover { border-color: #6366f1; }
+
+  @keyframes done-flash { 0%,100% { border-color: #10b981; } 50% { border-color: #34d399; } }
+  .card.updated { animation: done-flash .55s ease 2; }
+
+  @keyframes gen-pulse {
+    0%   { border-color: #6366f1; box-shadow: 0 0 0 0   rgba(99,102,241,.5); }
+    50%  { border-color: #818cf8; box-shadow: 0 0 0 5px rgba(99,102,241,0);  }
+    100% { border-color: #6366f1; box-shadow: 0 0 0 0   rgba(99,102,241,.5); }
+  }
+  .card.streaming { animation: gen-pulse 1.4s ease-in-out infinite; }
+
+  .card-label {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 10px; font-size: 11px; color: #94a3b8;
+    background: #0f172a; border-bottom: 1px solid #1e293b; min-height: 28px;
+  }
+  .badge {
+    padding: 1px 6px; border-radius: 4px;
+    background: #1e293b; font-size: 10px; color: #64748b;
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+  }
+  .card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @keyframes ellipsis { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+  .gen-text { color: #818cf8; font-style: italic; }
+  .gen-text::after { content: '.'; animation: ellipsis 1.2s steps(1) infinite; }
+
+  /* iframe: 1280x720 scaled to 480x270 (scale 0.375) */
+  .iframe-wrap { width: 480px; height: 270px; overflow: hidden; position: relative; background: #fff; }
+  iframe {
+    width: 1280px; height: 720px;
+    transform: scale(0.375); transform-origin: top left;
+    border: none; display: block; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Slides Preview</h1>
+  <span class="dot" id="dot"></span>
+  <span id="status-text">Connecting...</span>
+</div>
+
+<div id="container"></div>
+
+<div class="empty" id="empty">
+  <svg width="42" height="42" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="14" rx="2"/>
+    <path d="M8 21h8M12 17v4"/>
+  </svg>
+  <p>Loading slide previews...</p>
+</div>
+
+<script>
+const container  = document.getElementById('container');
+const emptyEl    = document.getElementById('empty');
+const dot        = document.getElementById('dot');
+const statusText = document.getElementById('status-text');
+
+const sections    = {};    // projectName -> sectionEl
+const rows        = {};    // projectName -> rowEl
+const cards       = {};    // relPath     -> cardEl
+const buffers     = {};    // relPath     -> accumulated html string
+const flushTmrs   = {};    // relPath     -> debounce timer id
+const completedAt = {};    // relPath     -> timestamp
+let   initialLoadDone = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function slideNum(relPath) {
+  const m = relPath.match(/slide_0*(\d+)/i);
+  return m ? parseInt(m[1], 10) : 999;
+}
+
+function projectOf(relPath) {
+  return relPath.split('/')[0];
+}
+
+function refresh() {
+  const hasSections = Object.keys(sections).length > 0;
+  container.style.display = hasSections ? 'block' : 'none';
+  emptyEl.style.display   = hasSections ? 'none'  : 'flex';
+}
+
+// ── Section management ───────────────────────────────────────────────────
+
+function ensureSection(projName) {
+  if (sections[projName]) return sections[projName];
+
+  const sec = document.createElement('div');
+  sec.className = 'project-section';
+  sec.dataset.project = projName;
+
+  const rowId   = 'row-'   + projName.replace(/[^a-z0-9]/gi, '_');
+  const countId = 'count-' + projName.replace(/[^a-z0-9]/gi, '_');
+
+  sec.innerHTML =
+    '<a class="project-header" href="/project/' + encodeURIComponent(projName) + '" target="_blank">' +
+      '<span class="project-name">' + projName + '</span>' +
+      '<span class="slide-count" id="' + countId + '"></span>' +
+      '<span class="project-arrow">&#8599;</span>' +
+    '</a>' +
+    '<div class="slides-row" id="' + rowId + '"></div>';
+
+  // Initial load: server returns newest-first, so append in that order.
+  // Live events: new project is newer than everything already shown → prepend.
+  if (initialLoadDone) {
+    container.insertBefore(sec, container.firstChild);
+  } else {
+    container.appendChild(sec);
+  }
+  sections[projName] = sec;
+  rows[projName]     = sec.querySelector('.slides-row');
+  refresh();
+  return sec;
+}
+
+function bringToTop(projName) {
+  const sec = sections[projName];
+  if (sec && container.firstChild !== sec) container.insertBefore(sec, container.firstChild);
+}
+
+function updateCount(projName) {
+  const row      = rows[projName];
+  const countId  = 'count-' + projName.replace(/[^a-z0-9]/gi, '_');
+  const countEl  = document.getElementById(countId);
+  if (row && countEl) {
+    const n = row.children.length;
+    countEl.textContent = n + ' slide' + (n !== 1 ? 's' : '');
+  }
+}
+
+// ── Card management ──────────────────────────────────────────────────────
+
+function ensureCard(relPath, name) {
+  if (cards[relPath]) return cards[relPath];
+
+  const proj = projectOf(relPath);
+  ensureSection(proj);
+  const row  = rows[proj];
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.key = relPath;
+
+  const num         = String(slideNum(relPath)).padStart(2, '0');
+  const displayName = name || relPath.split('/').pop();
+
+  card.innerHTML =
+    '<div class="card-label">' +
+      '<span class="badge">' + num + '</span>' +
+      '<span class="card-name">' + displayName + '</span>' +
+    '</div>' +
+    '<div class="iframe-wrap"><iframe></iframe></div>';
+
+  card.addEventListener('click', () => window.open('/view/' + relPath, '_blank'));
+
+  // Insert in ascending slide-number order within the row
+  const n       = slideNum(relPath);
+  const sibling = [...row.children].find(c => slideNum(c.dataset.key) > n);
+  row.insertBefore(card, sibling || null);
+
+  cards[relPath] = card;
+  updateCount(proj);
+  return card;
+}
+
+function reloadFromFile(relPath) {
+  const card = cards[relPath];
+  if (!card) return;
+  const iframe = card.querySelector('iframe');
+  iframe.removeAttribute('srcdoc');
+  iframe.src = '/files/' + relPath + '?t=' + Date.now();
+}
+
+// ── Initial file scan ────────────────────────────────────────────────────
+
+async function loadInitial() {
+  try {
+    const res    = await fetch('/api/slides');
+    const slides = await res.json();
+    slides.forEach(s => { ensureCard(s.rel_path, s.name); reloadFromFile(s.rel_path); });
+  } catch (_) {}
+  initialLoadDone = true;
+}
+
+// ── Streaming delta ──────────────────────────────────────────────────────
+
+function onSlideDelta(relPath, name, delta) {
+  const card  = ensureCard(relPath, name);
+  const label = card.querySelector('.card-name');
+
+  // Show streaming state
+  if (!card.classList.contains('streaming')) {
+    card.classList.add('streaming');
+    if (label) label.innerHTML = '<span class="gen-text">Generating</span>';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  buffers[relPath] = (buffers[relPath] || '') + delta;
+
+  // Debounce srcdoc update (max 100 ms between repaints)
+  if (flushTmrs[relPath]) clearTimeout(flushTmrs[relPath]);
+  flushTmrs[relPath] = setTimeout(() => {
+    const iframe = card.querySelector('iframe');
+    if (iframe) iframe.srcdoc = buffers[relPath];
+    flushTmrs[relPath] = null;
+  }, 100);
+}
+
+// ── Slide complete ───────────────────────────────────────────────────────
+
+function onSlideComplete(relPath, name) {
+  completedAt[relPath] = Date.now();
+
+  if (flushTmrs[relPath]) { clearTimeout(flushTmrs[relPath]); delete flushTmrs[relPath]; }
+  delete buffers[relPath];
+
+  const card  = ensureCard(relPath, name);
+  const label = card.querySelector('.card-name');
+
+  card.classList.remove('streaming');
+  if (label) label.textContent = name || relPath.split('/').pop();
+  reloadFromFile(relPath);
+
+  card.classList.remove('updated');
+  void card.offsetWidth;
+  card.classList.add('updated');
+  setTimeout(() => card.classList.remove('updated'), 1400);
+}
+
+// ── Filesystem change (watchfiles fallback) ──────────────────────────────
+
+function onSlideChanged(relPath, name) {
+  // Skip if slide_complete just fired for this path (avoids double reload)
+  const t = completedAt[relPath];
+  if (t && Date.now() - t < 3000) return;
+
+  ensureCard(relPath, name);
+  reloadFromFile(relPath);
+
+  const card = cards[relPath];
+  if (card) {
+    card.classList.remove('updated');
+    void card.offsetWidth;
+    card.classList.add('updated');
+    setTimeout(() => card.classList.remove('updated'), 1400);
+  }
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────
+
+const es = new EventSource('/api/events');
+es.onopen  = () => { dot.className = 'dot live'; statusText.textContent = 'Live'; };
+es.onerror = () => { dot.className = 'dot';      statusText.textContent = 'Reconnecting...'; };
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  switch (d.type) {
+    case 'connected':      loadInitial(); break;
+    case 'slide_delta':    onSlideDelta(d.rel_path, d.name, d.delta); break;
+    case 'slide_complete': onSlideComplete(d.rel_path, d.name); break;
+    case 'slide_changed':  onSlideChanged(d.rel_path, d.name); break;
+  }
+};
+</script>
+</body>
+</html>

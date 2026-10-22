@@ -1,6 +1,6 @@
 import os
 
-from run_utils import _bootstrap, _openswarm_state_root, _preload_agentswarm_bin
+from run_utils import _bootstrap, _configure_product_env, _openswarm_state_root, _preload_agentswarm_bin
 
 _RUNTIME_CONFIGURED = False
 
@@ -12,8 +12,6 @@ def _configure_runtime() -> None:
 
     from dotenv import load_dotenv
     from agents import set_tracing_disabled, set_tracing_export_api_key
-    from patches.patch_agency_swarm_dual_comms import apply_dual_comms_patch
-    from patches.patch_file_attachment_refs import apply_file_attachment_reference_patch
     from patches.patch_ipython_interpreter_composio import (
         apply_ipython_composio_context_patch,
     )
@@ -22,8 +20,6 @@ def _configure_runtime() -> None:
     load_dotenv(dotenv_path=_openswarm_state_root() / ".env")
 
     apply_utf8_file_read_patch()
-    apply_dual_comms_patch()
-    apply_file_attachment_reference_patch()
     apply_ipython_composio_context_patch()
 
     _tracing_key = os.getenv("OPENAI_API_KEY")
@@ -44,6 +40,7 @@ _configure_runtime()
 
 def create_agency(load_threads_callback=None):
     _configure_runtime()
+    _configure_product_env()
 
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage
