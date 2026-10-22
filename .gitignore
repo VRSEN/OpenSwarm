@@ -1,5 +1,8 @@
 node_modules/
 mnt/
+
+# Local financial database — never commit
+data/*.db
 .bun-cache/
 .playwright-browsers/
 
