@@ -2,6 +2,11 @@
 import os
 
 
+def _configured_model() -> str:
+    """Return DEFAULT_MODEL when set to a non-empty value, else empty string."""
+    return (os.getenv("DEFAULT_MODEL") or "").strip()
+
+
 def get_default_model(fallback: str = "gpt-5.4"):
     """Return the configured default model for standard agents."""
     model = _configured_model() or fallback
